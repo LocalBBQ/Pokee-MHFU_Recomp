@@ -99,7 +99,7 @@ Esc, o los dos sticks pulsados a la vez (L3+R3), abre el menú propio de Pokee. 
 
 ## Cómo funciona
 
-El ejecutable se analiza y cada instrucción de su código se convierte en C++, que se compila dentro del programa. Además, el juego carga durante la ejecución 290 overlays de código en unas pocas regiones de memoria compartidas; cada uno se recompila en su propia biblioteca, y cuando el juego carga uno, la biblioteca correspondiente se instala entre fotogramas. Un intérprete ejecuta cualquier código que el conjunto recompilado no cubra, así que el juego nunca se detiene; solo va más lento en esas partes.
+El ejecutable se analiza y cada instrucción de su código se convierte en C++, que se compila dentro del programa. Además, el juego carga durante la ejecución 290 overlays de código en unas pocas regiones de memoria compartidas; cada uno se recompila, los de una misma región se enlazan en una sola biblioteca, y cuando el juego carga uno, su código recompilado se instala entre fotogramas. Un intérprete ejecuta cualquier código que el conjunto recompilado no cubra, así que el juego nunca se detiene; solo va más lento en esas partes.
 
 Alrededor de ese código hay una reimplementación del sistema de la PSP: un núcleo con hilos, semáforos, flags de eventos y temporizadores; lectura del disco directamente desde la imagen; un renderizador en Vulkan para el motor gráfico de la PSP; mezcla de voces por software para el audio; y entrada mediante SDL3.
 

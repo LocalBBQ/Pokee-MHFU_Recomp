@@ -14,7 +14,7 @@ The game's executable and its 290 code overlays are MIPS code for the PSP. The b
 | 2. Prepare the executable | The bootstrap checks your disc image and prepares the decrypted `EBOOT.ELF` from it | `Pokee --install image.iso` |
 | 3. Generate | Analyse `EBOOT.ELF` and write the recompiled executable as 89 C++ units in `profiles/mhfu/generated/` | `profiles/mhfu/scripts/generate.sh` |
 | 4. Compile the executable | Compile the 67 units together with the host (kernel, HLE, renderer, audio, interface) | `cmake --build out/mhfu --target Pokee` |
-| 5. Overlays | Extract the 290 code overlays from the disc image's `DATA.BIN`, recompile each one, and build a shared library per overlay | `profiles/mhfu/scripts/build_overlays.sh` |
+| 5. Overlays | Extract the 290 code overlays from the disc image's `DATA.BIN`, recompile each one, and link the overlays of each memory slot into one shared library, four in all | `profiles/mhfu/scripts/build_overlays.sh` |
 
 The installer accepts USA Freedom Unite `ULUS-10391` version 1.01 only: the disc id in `PARAM.SFO` must be `ULUS10391`, and the SHA-256 of the encrypted `EBOOT.BIN` must be that release's. Portable 3rd and other regions are refused. The accepted executable starts on its 32 MiB layout. `generate.sh` stamps the SHA-256 of the prepared executable it translates, and launch registers that corpus only for an executable with the same hash. That resident code is 67 units; its overlay sections are named in the ELF and contain no file bytes.
 
@@ -107,7 +107,7 @@ Then follow the [build steps](#build-steps) in that Bash, with these differences
 Windows specifics:
 - **Data directory.** Step 2 writes `EBOOT.ELF` and `settings.ini` to the per-user data directory. It takes precedence over `profiles/mhfu/game`, and both hold the same data after step 3.
 - **Symbolic links.** `prepare_game.sh` links the disc image into `profiles/mhfu/game`. Git Bash copies the file instead unless Windows Developer Mode is on and `MSYS=winsymlinks:nativestrict` is exported. A copy works too; it costs about 1.3 GB.
-- **Overlay DLLs.** Each overlay links against the executable's import library. The runtime (`psprecomp_core`) is an object library, so its objects belong to the executable and `WINDOWS_EXPORT_ALL_SYMBOLS` exports them to the overlays.
+- **Overlay DLLs.** Each overlay library links against the executable's import library. The runtime (`psprecomp_core`) is an object library, so its objects belong to the executable and `WINDOWS_EXPORT_ALL_SYMBOLS` exports them to the overlays.
 - **Build lock.** As on macOS and Linux, `cmake --build` locks the build directory through `ninja-locked.cmd`. A second build waits. Run builds through `cmake --build`, not `ninja` directly.
 - **Compiler cache on a non-English Windows.** `ccache` reads the include list MSVC prints, which is translated into the language of the installed Visual Studio language pack; with a non-English one it can fail to parse it. Install the English language pack of the Build Tools and `set VSLANG=1033` before configuring and building.
 - **Headless runs.** Redirected to a file, the program's output is block-buffered, and a process that is killed, for example at a time limit, loses what is still in the buffer. `MHFU_PERF=log` lines are flushed as they are written.
@@ -148,7 +148,9 @@ out/mhfu/bin/Pokee
 
 Check the configure output for `mhfu: Vulkan renderer enabled`. Without SDL3, Vulkan or `glslangValidator`, configuration still succeeds but builds a program with no window.
 
-Stage 5 is resumable. If it stops, run it again: overlays that are already built are skipped. You can play before it finishes. An overlay without its library runs in an interpreter, which works but is much slower, so hunts stutter until the overlays are built.
+Stage 5 is resumable. If it stops, run it again: overlays that are already compiled are skipped. You can play before it finishes. A slot's library is linked once all of its overlays are compiled; until then they run in an interpreter, which works but is much slower, so hunts stutter until the overlays are built.
+
+The overlays of one slot share a library because Windows Defender scans every DLL the game loads, and 290 of them could make a start very slow. `-DMHFU_OVERLAY_PACKS=OFF` builds one library per overlay instead, as releases up to 1.0.0 did. The game loads either kind, and switching the option relinks the libraries without compiling the overlays again.
 
 ### FFmpeg
 
@@ -178,6 +180,7 @@ The generated code is its own object library, and every compile goes through `cc
 | `profiles/mhfu/CMakeLists.txt` (flags, sources) | Host files only; the generated units have their own flags | Seconds to a minute |
 | Headers in `include/psprecomp/` (the runtime the generated code uses) | All 67 generated units **and** all 290 overlays | The full build again, unless `ccache` already holds that exact version |
 | The recompiler, then `generate.sh` | Only the units whose generated text changed | Depends on the change |
+| One overlay's corpus (`add_overlay.py`) | That overlay's units, then the library of its slot | Its compile, plus seconds to relink |
 
 Keep `include/psprecomp/` stable when you can. It is the one place where a small edit costs hours.
 

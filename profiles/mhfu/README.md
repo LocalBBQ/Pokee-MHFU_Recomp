@@ -190,7 +190,9 @@ Build them all once:
 profiles/mhfu/scripts/build_overlays.sh [build_dir] [jobs]
 ```
 
-It extracts every overlay from `DATA.BIN` into `analysis/overlays`, recompiles each one that has no library yet into `overlays/`, and then builds all their shared libraries into `bin/overlays` in a single `cmake --build` with `jobs` parallel jobs (default 2). Libraries that already exist are skipped and recompiled overlays are not recompiled again, so an interrupted run resumes. The game is playable before this finishes: an overlay with no library runs through the interpreter, which works but is roughly twenty times slower.
+It extracts every overlay from `DATA.BIN` into `analysis/overlays`, recompiles each one that has no corpus yet into `overlays/`, and then builds the overlay libraries into `bin/overlays` in a single `cmake --build` with `jobs` parallel jobs (default 2). Recompiled overlays are not recompiled again and compiled ones are not compiled again, so an interrupted run resumes. The game is playable before this finishes: an overlay whose library is not linked yet runs through the interpreter, which works but is roughly twenty times slower.
+
+The overlays of one slot are linked into one library, `ovlpack_<slot base>`: four libraries for the 290 overlays. Windows Defender scans every DLL the game loads, so fewer files start faster there. `-DMHFU_OVERLAY_PACKS=OFF` links one library per overlay, named after its corpus, as builds up to 1.0.0 did; the host loads both kinds, also from an older `MHFU_OVERLAY_DIR`. Each overlay's code is compiled once, into an object library (`overlay_<corpus>`), so switching relinks the libraries without compiling again. `bin/overlay_libraries.txt` lists every library and the corpora in it, and configuring removes libraries from `bin/overlays` that the build no longer makes, since the host would load them too.
 
 ### How the host picks an overlay
 
@@ -198,7 +200,7 @@ Many overlays share one address, so each has its own corpus and the host must us
 
 On a dispatch miss inside a slot, the host hashes those bytes in guest memory, unregisters whatever was installed there and registers the matching corpus. Every frame, and before a chained call into a slot, it compares each installed slot's header against the one it installed, which is enough to notice a swap without rehashing the code. The call check matters when the game jumps into a new image before it flushes the instruction cache: the previous image's compiled code is dropped first, and the jump is looked up again. An overlay may be larger than the gap to the next slot's base; the slot list records where images load, not how much room they have.
 
-Each library resolves its framework symbols from the executable that loads it, so it only matches a host built from the same sources; `cmake --build out/mhfu` rebuilds all of them. `MHFU_OVERLAY_DIR` points the host at another library directory.
+Each library resolves its framework symbols from the executable that loads it, so it only matches a host built from the same sources; `cmake --build out/mhfu` rebuilds all of them (or `--target mhfu_overlays` for the overlay libraries alone). `MHFU_OVERLAY_DIR` points the host at another library directory.
 
 To build a single overlay by hand — for example one dumped from memory with `MHFU_DUMP_OVERLAYS`:
 
