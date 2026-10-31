@@ -54,6 +54,7 @@ jobs:
       - name: Test archive and overlay tools
         run: |
           python3 profiles/mhfu/tests/tool_security_tests.py
+          python3 profiles/mhfu/tests/overlay_libraries_tests.py
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 
       - name: Run tests

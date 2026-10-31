@@ -1,7 +1,8 @@
 // Run-time overlay support. The game copies overlay code into fixed slots, so
 // the corpus for an overlay can only be installed once its bytes are in guest
-// memory. Each recompiled overlay is a shared library next to the executable,
-// identified by the size and hash of the dump it was generated from; on a
+// memory. The recompiled overlays are in shared libraries next to the
+// executable, usually one per slot. Each corpus is identified by the size and
+// hash of the dump it was generated from; on a
 // dispatch miss inside a slot the matching corpus replaces whatever was
 // registered there before.
 #include "overlays.hpp"
@@ -185,32 +186,54 @@ std::string library_error() {
 #endif
 }
 
-void load_overlay_library(const std::filesystem::path &path) {
+void add_overlay_corpus(const std::filesystem::path &path, const OverlayModuleInfo *info,
+    decltype(&mhfu_register_overlay) install, const std::uint32_t *dispatched) {
+    if (info == nullptr || install == nullptr || info->abi_version != kOverlayAbiVersion) {
+        std::cerr << "[overlay] " << path_to_utf8(path.filename()) << " holds a corpus built for a different host\n";
+        return;
+    }
+    OverlayCorpus corpus{info->name, info->base, info->size, info->code_size, info->hash, install, {}};
+    for (const std::uint32_t *address = dispatched; address != nullptr && *address != 0u; ++address)
+        corpus.dispatched.push_back(*address);
+    overlay_corpora().push_back(std::move(corpus));
+}
+
+// Returns whether the library held any corpus.
+bool load_overlay_library(const std::filesystem::path &path) {
     void *handle = load_library(path);
     if (handle == nullptr) {
         std::cerr << "[overlay] cannot load " << path_to_utf8(path.filename()) << ": " << library_error() << "\n";
-        return;
+        return false;
     }
+    const std::size_t before = overlay_corpora().size();
+    if (const auto pack_of =
+            reinterpret_cast<decltype(&mhfu_overlay_pack)>(library_symbol(handle, "mhfu_overlay_pack"))) {
+        const OverlayPack *pack = pack_of();
+        if (pack == nullptr || pack->abi_version != kOverlayAbiVersion ||
+            (pack->count != 0u && pack->entries == nullptr)) {
+            std::cerr << "[overlay] " << path_to_utf8(path.filename()) << " was built for a different host\n";
+            return false;
+        }
+        for (std::uint32_t i = 0; i < pack->count; ++i) {
+            const OverlayCorpusEntry *entry = pack->entries[i];
+            if (entry == nullptr) continue;
+            add_overlay_corpus(path, entry->info, entry->install, entry->dispatched_calls);
+        }
+        return overlay_corpora().size() != before;
+    }
+    // One corpus, from a build before packs.
     const auto info_of = reinterpret_cast<decltype(&mhfu_overlay_info)>(library_symbol(handle, "mhfu_overlay_info"));
     const auto install =
         reinterpret_cast<decltype(&mhfu_register_overlay)>(library_symbol(handle, "mhfu_register_overlay"));
     if (info_of == nullptr || install == nullptr) {
         std::cerr << "[overlay] " << path_to_utf8(path.filename()) << " is not an overlay library\n";
-        return;
+        return false;
     }
-    const OverlayModuleInfo *info = info_of();
-    if (info == nullptr || info->abi_version != kOverlayAbiVersion) {
-        std::cerr << "[overlay] " << path_to_utf8(path.filename()) << " was built for a different host\n";
-        return;
-    }
-    OverlayCorpus corpus{info->name, info->base, info->size, info->code_size, info->hash, install, {}};
     // Optional: a library built before the list existed has none.
-    if (const auto dispatched_of = reinterpret_cast<decltype(&mhfu_overlay_dispatched_calls)>(
-            library_symbol(handle, "mhfu_overlay_dispatched_calls"))) {
-        for (const std::uint32_t *address = dispatched_of(); address != nullptr && *address != 0u; ++address)
-            corpus.dispatched.push_back(*address);
-    }
-    overlay_corpora().push_back(std::move(corpus));
+    const auto dispatched_of = reinterpret_cast<decltype(&mhfu_overlay_dispatched_calls)>(
+        library_symbol(handle, "mhfu_overlay_dispatched_calls"));
+    add_overlay_corpus(path, info_of(), install, dispatched_of != nullptr ? dispatched_of() : nullptr);
+    return overlay_corpora().size() != before;
 }
 
 void load_overlay_libraries() {
@@ -226,8 +249,10 @@ void load_overlay_libraries() {
         if (entry.is_regular_file() && is_overlay_library(entry.path())) paths.push_back(entry.path());
     }
     std::sort(paths.begin(), paths.end());
-    for (const std::filesystem::path &path : paths) load_overlay_library(path);
-    std::cout << "Overlay corpora: " << overlay_corpora().size() << " from " << path_to_utf8(directory) << "\n";
+    std::size_t libraries = 0;
+    for (const std::filesystem::path &path : paths) libraries += load_overlay_library(path) ? 1u : 0u;
+    std::cout << "Overlay corpora: " << overlay_corpora().size() << " from " << path_to_utf8(directory) << " ("
+              << libraries << (libraries == 1u ? " library" : " libraries") << ")\n";
 }
 
 // Writes the loaded image next to the other dumps so the corpus can be built.

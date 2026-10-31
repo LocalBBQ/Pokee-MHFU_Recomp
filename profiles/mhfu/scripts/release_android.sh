@@ -26,6 +26,8 @@ repo_dir="$(cd "$profile_dir/../.." && pwd)"
 # The pinned SDL3 and font, shared with the Linux release.
 # shellcheck source=../packaging/linux/sources.sh
 source "$profile_dir/packaging/linux/sources.sh"
+# shellcheck source=overlay_libraries.sh
+source "$profile_dir/scripts/overlay_libraries.sh"
 
 build_dir=""
 version=""
@@ -121,13 +123,8 @@ cmake --build "$build_dir" --target Pokee -j "$jobs"
 step "Checking the overlay libraries"
 # They are copied as they are, so they must all be there and newer than the
 # framework headers they were compiled against.
-expected="$(ninja -C "$build_dir" -t targets all | grep -c '^overlay_[^:]*: phony')"
-built="$(find "$build_dir/bin/overlays" -name 'libovl*.so' | wc -l | tr -d ' ')"
-if [[ "$built" -ne "$expected" ]]; then
-    echo "error: $built of $expected overlay libraries in $build_dir/bin/overlays; build them first" \
-        "(cmake --build $build_dir)" >&2
-    exit 1
-fi
+check_overlay_libraries "$build_dir/bin/overlay_libraries.txt" "$build_dir/bin/overlays" "$profile_dir" .so || exit 1
+built="$overlay_libraries"
 # (head closes the pipe early, which pipefail would take for a failure.)
 oldest="$(ls -tr "$build_dir"/bin/overlays/libovl*.so | head -1 || true)"
 newer_header="$(find "$repo_dir/include/psprecomp" -type f -newer "$oldest" | head -1 || true)"
