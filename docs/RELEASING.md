@@ -1,6 +1,6 @@
 # Releasing
 
-A release gives players the program ready to run: the executable with the recompiled game code built in and the 290 overlay libraries. Like the repository, it does not include any game assets or original game files: no disc image, no copy of the game's executable or data, and no textures, models, audio or video from the game. On first start it asks for the files from the player's own legally obtained copy, the disc image, checks it, accepts only the original release, and prepares the game from it (see [Installer](../profiles/mhfu/README.md#installer)).
+A release gives players the program ready to run: the executable with the recompiled game code built in and the overlay libraries, which hold the 290 recompiled overlays, one library per memory slot. Like the repository, it does not include any game assets or original game files: no disc image, no copy of the game's executable or data, and no textures, models, audio or video from the game. On first start it asks for the files from the player's own legally obtained copy, the disc image, checks it, accepts only the original release, and prepares the game from it (see [Installer](../profiles/mhfu/README.md#installer)).
 
 Releases are built by maintainers, not by CI: the recompiled code is generated from the game's executable, so a build needs a copy of the game. The game data stays on the maintainer's machine. Every artifact is checked for it before it is published.
 
@@ -158,7 +158,7 @@ Contents/
     MacOS/Pokee               the executable
     Frameworks/                libSDL3.0.dylib, libvulkan.1.dylib, libMoltenVK.dylib,
                                libavcodec.61.dylib, libavutil.59.dylib
-    Frameworks/overlays/       the 290 overlay libraries
+    Frameworks/overlays/       the overlay libraries
     Resources/Pokee.icns      the icon, from docs/images/emblem.svg (packaging/macos/make_icon.sh)
     Resources/fonts/           Noto Sans CJK JP, the fallback Japanese font
     Resources/vulkan/icd.d/    MoltenVK's driver manifest, found by the bundled Vulkan loader
@@ -171,7 +171,7 @@ The app is signed **ad hoc**: no Apple Developer ID, no notarization. Gatekeeper
 
 ### What the script does
 
-1. Checks the build directory: an arm64 `Pokee` built with `-DMHFU_RELEASE=ON` (a developer build, which names its checkout's game directory, is refused), 290 overlay libraries in `bin/overlays`, one per corpus in `profiles/mhfu/overlays`, and the bundled LGPL FFmpeg in `bin/lib` configured as `cmake/FFmpeg.cmake` pins it. Nothing in the build directory is rebuilt or changed.
+1. Checks the build directory: an arm64 `Pokee` built with `-DMHFU_RELEASE=ON` (a developer build, which names its checkout's game directory, is refused), every overlay library that `bin/overlay_libraries.txt` lists in `bin/overlays` and nothing else, the list covering every corpus in `profiles/mhfu/overlays`, and the bundled LGPL FFmpeg in `bin/lib` configured as `cmake/FFmpeg.cmake` pins it. Nothing in the build directory is rebuilt or changed.
 2. Fetches the pinned sources in `packaging/macos/sources.sh` (which takes SDL3 and the font from `packaging/linux/sources.sh`) and builds SDL3 and the Vulkan loader for arm64 and the deployment target, macOS 13. MoltenVK is the Khronos release build, thinned to arm64.
 3. Assembles `Pokee.app`, points every library reference at `@rpath` with the single rpath `@executable_path/../Frameworks`, and strips local symbols (the symbols the executable exports to the overlays stay).
 4. Checks that every symbol the binaries import from the C and C++ runtime exists in the macOS 13 SDK, then marks the binaries that were built for a newer macOS (the build machine's) for macOS 13 with `vtool`. This is what lets a build made on the newest macOS run on older ones without recompiling the game code.
@@ -236,7 +236,7 @@ spctl --assess --type execute -vv "$check/Pokee.app"
 rm -rf "$check"
 ```
 
-`--install` without `--in-place` copies the 1.3 GB image into the throwaway directory instead. The window run should start the game, print `Overlay corpora: 290 from …/Pokee.app/Contents/Frameworks/overlays`, and play the intro movie with sound. Then play the release once with a gamepad, a save and a reload, following [`TESTING.md`](TESTING.md), and open it once through Finder from a quarantined copy to see the Gatekeeper steps players will see.
+`--install` without `--in-place` copies the 1.3 GB image into the throwaway directory instead. The window run should start the game, print `Overlay corpora: 290 from …/Pokee.app/Contents/Frameworks/overlays (4 libraries)`, and play the intro movie with sound. Then play the release once with a gamepad, a save and a reload, following [`TESTING.md`](TESTING.md), and open it once through Finder from a quarantined copy to see the Gatekeeper steps players will see.
 
 ### Publish
 
@@ -252,15 +252,15 @@ SDL3 and the font are pinned in `packaging/linux/sources.sh` for both systems; t
 
 | Artifact | Contents |
 | --- | --- |
-| `pokee-<version>-windows-x86_64.zip` | The folder `pokee-<version>-windows-x86_64` with `Pokee.exe`, `overlays/` (the 290 overlay DLLs), `SDL3.dll`, the FFmpeg DLLs (`avcodec`, `avutil`, `swresample`), the Visual C++ runtime (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`), `licenses/`, `README.txt` and `BUILDINFO.txt`. It keeps its data in `%APPDATA%\Pokee\MHFU` |
+| `pokee-<version>-windows-x86_64.zip` | The folder `pokee-<version>-windows-x86_64` with `Pokee.exe`, `overlays/` (the four overlay DLLs), `SDL3.dll`, the FFmpeg DLLs (`avcodec`, `avutil`, `swresample`), the Visual C++ runtime (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`), `licenses/`, `README.txt` and `BUILDINFO.txt`. It keeps its data in `%APPDATA%\Pokee\MHFU` |
 | `pokee-<version>-windows-x86_64-portable.zip` | The same in a folder named `…-portable`, plus `portable.txt`, which keeps all data in `data\` next to `Pokee.exe` (see [Portable copy](../profiles/mhfu/README.md#portable-copy)) ([#152](https://github.com/TeamGDB/Yakumo/issues/152)) |
-| `BUILDINFO-windows.txt` | Commit, compiler, SDL3 and FFmpeg versions and the overlay count, for the release notes |
+| `BUILDINFO-windows.txt` | Commit, compiler, SDL3 and FFmpeg versions and the overlay DLL count, for the release notes |
 
 The FFmpeg DLLs are BtbN's prebuilt LGPL shared build, which the build downloads and checks against its pinned SHA-256 (see [FFmpeg](BUILDING.md#ffmpeg)); `licenses/FFmpeg-SOURCE.txt` names the build and its source.
 
 ### What the script does
 
-1. Checks the build directory: configured with `-DMHFU_RELEASE=ON`, `bin/Pokee.exe` built, one overlay DLL for every corpus in `profiles/mhfu/overlays`, and the bundled FFmpeg next to the executable. Nothing in the build directory is rebuilt or changed.
+1. Checks the build directory: configured with `-DMHFU_RELEASE=ON`, `bin/Pokee.exe` built, the overlay DLLs that `bin/overlay_libraries.txt` lists and no others, the list covering every corpus in `profiles/mhfu/overlays`, and the bundled FFmpeg next to the executable. Nothing in the build directory is rebuilt or changed.
 2. Stages the program with `SDL3.dll` from the SDL3 the build found (`SDL3_DIR` in its CMake cache; the official `SDL3-devel-*-VC.zip` layout), the Visual C++ runtime from the toolchain's redistributable folder (`$VCToolsRedistDir`) and the license texts.
 3. Checks with `dumpbin /dependents` that every DLL the executable and the overlays import is in the package or in `System32`. The Vulkan loader, `vulkan-1.dll`, comes with the graphics driver.
 4. Packs each zip with Windows' own `tar.exe`, unpacks it again, and refuses it if any file is named like game data (`EBOOT*`, `*.iso`, `*.cso`, `*.bin`, `*.prx`, `*.pbp`, `*.elf`, `*.ovl`, `DATA.BIN`, `PARAM.SFO`, `ms0`, `SAVEDATA`) or looks like it by content (an ELF, a PBP, an encrypted PSP module, a `PARAM.SFO` or an ISO 9660 image), or if any file contains the checkout's path, the user profile's path, the user name or the computer name.
@@ -330,7 +330,7 @@ The first configure needs an SDL3 built for Android to find; the release script 
 
 1. Fetches the pinned SDL3 and the fallback font, checks their SHA-256 and builds SDL3 for Android 10 once.
 2. Reconfigures the build directory as a release (`MHFU_RELEASE`, no checkout paths, `android-29`) against that SDL3 and rebuilds `libmain.so` if that changed it.
-3. Checks that every overlay library is there and newer than the framework headers.
+3. Checks that every overlay library `bin/overlay_libraries.txt` lists is there, and newer than the framework headers.
 4. Packs the APK with `packaging/android/build_apk.sh`: the native libraries, SDL's Java activity and the app's own, the font, and under `assets/licenses` the third-party notices, SDL's licence, FFmpeg's LGPL with where its source is, and the font's licence. The version name is `git describe`; the version code is the number of commits, so a later release installs as an update.
 5. Signs it with the release key, verifies the signature, refuses it if it holds any game file or if a library imports a function Android 10 lacks, and prints its size and SHA-256.
 

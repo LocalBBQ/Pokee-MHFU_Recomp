@@ -99,7 +99,7 @@ Downloads for Windows and Linux (the Steam Deck included) are on the [releases p
 
 ### Windows: slow starts and Microsoft Defender
 
-Pokee is made of many files: `Pokee.exe` and 290 overlay libraries in `overlays\`. Microsoft Defender scans each of them as the program loads it, which can make a start take far longer than it should. Excluding Pokee's folders from scanning fixes it:
+Microsoft Defender scans `Pokee.exe` and the overlay libraries in `overlays\` as the program loads them. Releases up to 1.0.0 shipped 290 overlay libraries, one per overlay, and the scans could make a start take far longer than it should. Later builds link the overlays into four libraries, one per memory slot. If a start is still slow, exclude Pokee's folders from scanning:
 
 1. Open **Windows Security → Virus & threat protection → Manage settings** (under *Virus & threat protection settings*).
 2. Scroll to **Exclusions** and choose **Add or remove exclusions → Add an exclusion → Folder**.
@@ -148,7 +148,7 @@ The full instructions are in [`profiles/mhfu/README.md`](profiles/mhfu/README.md
 
 ## How it works
 
-The executable is analyzed and every instruction of its code is emitted as C++, which is compiled into the program. The game also loads 290 code overlays at run time into a handful of shared memory slots; each is recompiled into its own library, and when the game loads one, the matching library is installed between frames. An interpreter covers any code the recompiled set does not reach, so nothing stops the game — it only runs slower there.
+The executable is analyzed and every instruction of its code is emitted as C++, which is compiled into the program. The game also loads 290 code overlays at run time into a handful of shared memory slots; each is recompiled, the overlays of one slot are linked into one library, and when the game loads an overlay, its recompiled code is installed between frames. An interpreter covers any code the recompiled set does not reach, so nothing stops the game — it only runs slower there.
 
 Around that code sits a reimplementation of the PSP system: a kernel with threads, semaphores, event flags and timers; disc I/O read straight from the image; a Vulkan renderer for the PSP's graphics engine; software voice mixing for audio; and input from SDL3.
 
