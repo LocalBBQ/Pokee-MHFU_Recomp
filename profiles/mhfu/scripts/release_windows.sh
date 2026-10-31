@@ -35,6 +35,8 @@ repo_dir="$(cd "$profile_dir/../.." && pwd)"
 work="${POKEE_WORK:-$repo_dir/out/release-windows}"
 stage="$work/stage"
 dist="$work/dist"
+# shellcheck source=overlay_libraries.sh
+source "$profile_dir/scripts/overlay_libraries.sh"
 
 version=""
 make_portable=1
@@ -76,11 +78,7 @@ step "Checking the build in $build_dir"
 [[ "$(cache_value MHFU_RELEASE)" == ON ]] || fail "$build_dir is not configured with -DMHFU_RELEASE=ON"
 bin="$build_dir/bin"
 [[ -f "$bin/Pokee.exe" ]] || fail "$bin/Pokee.exe is missing: build the Pokee target"
-expected_overlays=$(find "$profile_dir/overlays" -mindepth 2 -maxdepth 2 -name meta.txt 2> /dev/null | wc -l)
-built_overlays=$(find "$bin/overlays" -maxdepth 1 -name 'ovl*.dll' 2> /dev/null | wc -l)
-(( expected_overlays > 0 )) || fail "no overlay corpora in $profile_dir/overlays"
-(( built_overlays == expected_overlays )) ||
-    fail "$built_overlays overlay DLLs in $bin/overlays, but $expected_overlays corpora: build them all first"
+check_overlay_libraries "$bin/overlay_libraries.txt" "$bin/overlays" "$profile_dir" .dll || exit 1
 [[ ! "$bin/Pokee.exe" -ot "$(ls -t "$bin"/overlays/ovl*.dll | tail -1)" ]] ||
     echo "note: some overlay DLLs are newer than Pokee.exe; that is fine as long as both come from this checkout"
 ffmpeg_dlls=(avcodec-61.dll avutil-59.dll swresample-5.dll)
@@ -127,7 +125,7 @@ Configuration: Release; MHFU_RELEASE=ON
 Compiler: MSVC ${compiler_version:-$(basename "$compiler")}
 SDL3: $sdl3_version
 FFmpeg: bundled LGPL shared build ($(sed -n 's/^Build: *//p' "$bin/FFmpeg-SOURCE.txt" | sed 's#.*/##'))
-Overlay DLLs: $built_overlays
+Overlay DLLs: $overlay_libraries, holding $overlay_corpora overlays
 EOF
 
 step "Checking the DLLs every binary imports"

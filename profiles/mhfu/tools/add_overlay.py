@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn an overlay dump into a shared library Pokee loads at run time.
+"""Turn an overlay dump into a corpus in the overlay libraries Pokee loads at run time.
 
     add_overlay.py [-j N] [--no-build] <build_dir> <overlay.bin> <base_address>
     add_overlay.py --print-dispatch <base_address> <name>
@@ -7,9 +7,10 @@
 Steps: identify the dump from its header (name, sizes, FNV-1a hash of the header
 and the code after it), wrap only that code in a minimal ELF, run psp_recomp
 with a per-overlay symbol prefix and the overlay's calls to keep dispatched
-(config/overlay_dispatch.txt), then build the one CMake target for that overlay with
-N parallel jobs (default 2). The executable is not relinked. --no-build stops
-after psp_recomp and prints the target name, so a caller can build many
+(config/overlay_dispatch.txt), then build the overlay libraries (mhfu_overlays) with
+N parallel jobs (default 2): the overlay's code, and the library of its slot that
+it is linked into. The executable is not relinked. --no-build stops after
+psp_recomp and prints the overlay's compile target, so a caller can build many
 overlays in one Ninja run. --print-dispatch prints the dispatch= value a corpus
 of that overlay should record, for scripts/build_overlays.sh to compare.
 """
@@ -141,7 +142,7 @@ def main(argv):
     # already knows about that directory.
     source = os.path.dirname(os.path.dirname(PROFILE_DIR))
     subprocess.run(["cmake", "-S", source, "-B", build_dir], check=True)
-    subprocess.run(["cmake", "--build", build_dir, "--target", f"overlay_{prefix}",
+    subprocess.run(["cmake", "--build", build_dir, "--target", "mhfu_overlays",
                     "-j", str(options.jobs)], check=True)
     print(f"overlay {name}: {code_size} bytes of code at {base:#010x}")
     print(f"library: {os.path.join(build_dir, 'bin', 'overlays')}")

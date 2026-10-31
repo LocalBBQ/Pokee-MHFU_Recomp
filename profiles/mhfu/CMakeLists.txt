@@ -1318,9 +1318,19 @@ elseif(APPLE)
 endif()
 
 # Recompiled overlay corpora, produced by tools/add_overlay.py. Each directory
-# under overlays/ holds one corpus and becomes one shared module that the host
-# loads at run time, so a new overlay never relinks the executable.
+# under overlays/ holds one corpus. Its code is compiled into an object library
+# and linked into a shared library that the host loads at run time, so a new
+# overlay never relinks the executable.
+#
+# The corpora of one slot share a library: four in all, where there used to be
+# one per overlay. Windows Defender scans each DLL as the game loads it, so the
+# number of files is what it pays for. MHFU_OVERLAY_PACKS=OFF builds one
+# library per overlay again; the host loads both kinds.
+option(MHFU_OVERLAY_PACKS "Link the overlays of one slot into one library" ON)
 set(MHFU_OVERLAY_DIR "${CMAKE_BINARY_DIR}/bin/overlays")
+
+# The libraries the overlay corpora go into, and the corpora in each.
+set(MHFU_OVERLAY_LIBRARIES "")
 
 function(mhfu_add_overlay meta_path)
     get_filename_component(source_dir "${meta_path}" DIRECTORY)
@@ -1357,26 +1367,15 @@ function(mhfu_add_overlay meta_path)
     configure_file("${MHFU_PROFILE_DIR}/host/overlay_module.cpp.in" "${entry_point}" @ONLY)
 
     set(target "overlay_${MHFU_OVERLAY_PREFIX}")
-    add_library(${target} MODULE ${sources} "${entry_point}")
-    # Headers only: linking psprecomp_core would give the module its own copy of
-    # the runtime state the host already owns.
+    add_library(${target} OBJECT ${sources} "${entry_point}")
+    # The define CMake gives the sources of a shared module. With it the compile
+    # commands stay what they were when each overlay was its own library, so a
+    # build directory from then links its overlays again without compiling them.
+    target_compile_definitions(${target} PRIVATE ${target}_EXPORTS)
+    # Headers only: linking psprecomp_core would give the library its own copy
+    # of the runtime state the host already owns.
     target_include_directories(${target} PRIVATE
         "${source_dir}" "${MHFU_PROFILE_DIR}/host" "${PROJECT_SOURCE_DIR}/include")
-    if(WIN32 OR APPLE OR MHFU_ANDROID_APP)
-        # Both linkers want the host binary while linking the module: MSVC for
-        # its import library, ld64 as the bundle loader. ELF leaves the host
-        # symbols undefined and resolves them when the module is loaded. In an
-        # Android app the host is libmain.so, which the app loads privately,
-        # so the module names it as a dependency to find its symbols.
-        target_link_libraries(${target} PRIVATE Pokee)
-    else()
-        add_dependencies(${target} Pokee)
-        if(ANDROID)
-            # The NDK links every shared library with --no-undefined; these
-            # leave the host's symbols to the loader like any other ELF.
-            target_link_options(${target} PRIVATE "LINKER:-z,undefs")
-        endif()
-    endif()
     if(MSVC)
         target_compile_definitions(${target} PRIVATE PSPRECOMP_IMPORT_HOST_SYMBOLS=1)
         if(PSPRECOMP_GENERATED_OPT_LEVEL STREQUAL "0")
@@ -1387,17 +1386,78 @@ function(mhfu_add_overlay meta_path)
     else()
         target_compile_options(${target} PRIVATE -O${PSPRECOMP_GENERATED_OPT_LEVEL} -g0)
     endif()
+    set_target_properties(${target} PROPERTIES
+        JOB_POOL_COMPILE psprecomp_generated
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
+
+    if(MHFU_OVERLAY_PACKS)
+        string(REGEX REPLACE "^0[xX]" "" slot "${MHFU_OVERLAY_BASE}")
+        string(TOUPPER "${slot}" slot)
+        set(library "ovlpack_${slot}")
+    else()
+        set(library "${MHFU_OVERLAY_PREFIX}")
+    endif()
+    if(NOT library IN_LIST MHFU_OVERLAY_LIBRARIES)
+        set(MHFU_OVERLAY_LIBRARIES ${MHFU_OVERLAY_LIBRARIES} ${library} PARENT_SCOPE)
+    endif()
+    set_property(GLOBAL APPEND PROPERTY "MHFU_OVERLAY_LIBRARY_${library}" "${MHFU_OVERLAY_PREFIX}")
+endfunction()
+
+# Writes the entry point of the library `target`, which lists the corpus
+# entries mhfu::overlay_<entry> for the host (overlay_pack.cpp.in), and sets
+# `out_var` to its path.
+function(mhfu_configure_overlay_pack out_var target)
+    set(MHFU_PACK_DECLARATIONS "")
+    set(MHFU_PACK_ENTRIES "")
+    foreach(entry IN LISTS ARGN)
+        string(APPEND MHFU_PACK_DECLARATIONS "extern const OverlayCorpusEntry overlay_${entry};\n")
+        string(APPEND MHFU_PACK_ENTRIES "    &mhfu::overlay_${entry},\n")
+    endforeach()
+    set(entry_point "${CMAKE_CURRENT_BINARY_DIR}/overlays/${target}_pack.cpp")
+    configure_file("${MHFU_PROFILE_DIR}/host/overlay_pack.cpp.in" "${entry_point}" @ONLY)
+    set(${out_var} "${entry_point}" PARENT_SCOPE)
+endfunction()
+
+# Links one overlay library: the objects of OBJECT_LIBRARIES, which define the
+# corpus entries ENTRIES (overlay_module.cpp.in), and the entry point that lists
+# them.
+function(mhfu_add_overlay_library target)
+    cmake_parse_arguments(PARSE_ARGV 1 arg "" "OUTPUT_DIRECTORY;OUTPUT_NAME" "ENTRIES;OBJECT_LIBRARIES")
+    mhfu_configure_overlay_pack(entry_point ${target} ${arg_ENTRIES})
+    set(objects "")
+    foreach(object_library IN LISTS arg_OBJECT_LIBRARIES)
+        list(APPEND objects "$<TARGET_OBJECTS:${object_library}>")
+    endforeach()
+
+    add_library(${target} MODULE "${entry_point}" ${objects})
+    target_include_directories(${target} PRIVATE "${MHFU_PROFILE_DIR}/host" "${PROJECT_SOURCE_DIR}/include")
+    if(WIN32 OR APPLE OR MHFU_ANDROID_APP)
+        # Both linkers want the host binary while linking the library: MSVC for
+        # its import library, ld64 as the bundle loader. ELF leaves the host
+        # symbols undefined and resolves them when the library is loaded. In an
+        # Android app the host is libmain.so, which the app loads privately,
+        # so the library names it as a dependency to find its symbols.
+        target_link_libraries(${target} PRIVATE Pokee)
+    else()
+        add_dependencies(${target} Pokee)
+        if(ANDROID)
+            # The NDK links every shared library with --no-undefined; these
+            # leave the host's symbols to the loader like any other ELF.
+            target_link_options(${target} PRIVATE "LINKER:-z,undefs")
+        endif()
+    endif()
     if(MHFU_RELEASE_LINK_OPTIONS)
         target_link_options(${target} PRIVATE ${MHFU_RELEASE_LINK_OPTIONS})
     endif()
     set_target_properties(${target} PROPERTIES
-        JOB_POOL_COMPILE psprecomp_generated
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON
         PREFIX ""
         SUFFIX "${CMAKE_SHARED_LIBRARY_SUFFIX}"
-        OUTPUT_NAME "${MHFU_OVERLAY_PREFIX}"
-        LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_DIR}")
+        OUTPUT_NAME "${arg_OUTPUT_NAME}"
+        LIBRARY_OUTPUT_DIRECTORY "${arg_OUTPUT_DIRECTORY}")
     if(MHFU_ANDROID_APP)
         # An APK only carries libraries named lib*.so.
         set_target_properties(${target} PROPERTIES PREFIX "lib")
@@ -1408,8 +1468,52 @@ file(GLOB MHFU_OVERLAY_METADATA CONFIGURE_DEPENDS "${MHFU_PROFILE_DIR}/overlays/
 foreach(meta IN LISTS MHFU_OVERLAY_METADATA)
     mhfu_add_overlay("${meta}")
 endforeach()
+
+# bin/overlay_libraries.txt names each library and the corpora in it, one
+# corpus per line, for the scripts that check a build is complete.
+set(overlay_manifest "")
+set(overlay_files "")
+set(overlay_targets "")
+foreach(library IN LISTS MHFU_OVERLAY_LIBRARIES)
+    get_property(prefixes GLOBAL PROPERTY "MHFU_OVERLAY_LIBRARY_${library}")
+    list(SORT prefixes)
+    set(object_libraries "")
+    foreach(prefix IN LISTS prefixes)
+        list(APPEND object_libraries "overlay_${prefix}")
+    endforeach()
+    mhfu_add_overlay_library("overlay_library_${library}"
+        OUTPUT_DIRECTORY "${MHFU_OVERLAY_DIR}" OUTPUT_NAME "${library}"
+        ENTRIES ${prefixes} OBJECT_LIBRARIES ${object_libraries})
+    set(file_name "${library}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    if(MHFU_ANDROID_APP)
+        set(file_name "lib${file_name}")
+    endif()
+    list(APPEND overlay_files "${file_name}")
+    list(APPEND overlay_targets "overlay_library_${library}")
+    foreach(prefix IN LISTS prefixes)
+        string(APPEND overlay_manifest "${file_name} ${prefix}\n")
+    endforeach()
+endforeach()
+file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/bin/overlay_libraries.txt" CONTENT "${overlay_manifest}")
+add_custom_target(mhfu_overlays)
+if(overlay_targets)
+    add_dependencies(mhfu_overlays ${overlay_targets})
+endif()
+
+# The host loads every library in the directory, so one this build no longer
+# makes, such as the per-overlay ones from before MHFU_OVERLAY_PACKS changed,
+# would be loaded alongside the new ones and shipped with them.
+file(GLOB built_overlays "${MHFU_OVERLAY_DIR}/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+foreach(built IN LISTS built_overlays)
+    get_filename_component(file_name "${built}" NAME)
+    if(NOT file_name IN_LIST overlay_files)
+        file(REMOVE "${built}")
+        message(STATUS "mhfu: removed ${file_name} from ${MHFU_OVERLAY_DIR}; this build no longer makes it")
+    endif()
+endforeach()
 list(LENGTH MHFU_OVERLAY_METADATA MHFU_OVERLAY_COUNT)
-message(STATUS "mhfu: ${MHFU_OVERLAY_COUNT} overlay librar(ies) in ${MHFU_OVERLAY_DIR}")
+list(LENGTH overlay_files overlay_library_count)
+message(STATUS "mhfu: ${MHFU_OVERLAY_COUNT} overlay corpora in ${overlay_library_count} librar(ies) in ${MHFU_OVERLAY_DIR}")
 
 # Guest PCM staging validates the full mapped range before allocating.
 add_executable(mhfu_guest_pcm_tests
@@ -1494,16 +1598,42 @@ add_executable(mhfu_kernel_hle_tests tests/kernel_hle_tests.cpp)
 target_compile_definitions(mhfu_kernel_hle_tests PRIVATE PSPRECOMP_TEST_NIDS_CSV="${PROJECT_SOURCE_DIR}/configs/nids.csv")
 target_link_libraries(mhfu_kernel_hle_tests PRIVATE mhfu_test_host)
 
-# Two synthetic overlay modules sharing one slot. The host resolves their
-# framework symbols from this test, the way a game build resolves them from Pokee.
+# Synthetic overlay libraries for one slot. The host resolves their framework
+# symbols from this test, the way a game build resolves them from Pokee.
+# overlay-fixtures holds two libraries of one corpus each, exported the way a
+# build before packs did; overlay-pack-fixtures holds one library with both
+# corpora and one the host must refuse (tests/overlay_swap_module.cpp).
 if(NOT WIN32)
     set(MHFU_OVERLAY_FIXTURE_DIR "${CMAKE_BINARY_DIR}/bin/overlay-fixtures")
-    foreach(mark IN ITEMS 1 2)
+    set(MHFU_OVERLAY_PACK_FIXTURE_DIR "${CMAKE_BINARY_DIR}/bin/overlay-pack-fixtures")
+    set(fixture_objects "")
+    foreach(mark IN ITEMS 1 2 3)
+        set(fixture_object "mhfu_overlay_fixture_object_${mark}")
+        add_library(${fixture_object} OBJECT tests/overlay_swap_module.cpp)
+        target_compile_definitions(${fixture_object} PRIVATE
+            "MHFU_OVERLAY_FIXTURE_MARK=${mark}" "MHFU_OVERLAY_FIXTURE_ENTRY=overlay_fixture_${mark}")
+        list(APPEND fixture_objects "$<TARGET_OBJECTS:${fixture_object}>")
+        if(mark EQUAL 3)
+            continue()
+        endif()
         set(fixture_target "mhfu_overlay_fixture_${mark}")
         add_library(${fixture_target} MODULE tests/overlay_swap_module.cpp)
+        target_compile_definitions(${fixture_target} PRIVATE "MHFU_OVERLAY_FIXTURE_MARK=${mark}" MHFU_OVERLAY_FIXTURE_LEGACY=1)
+        set_target_properties(${fixture_target} PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_FIXTURE_DIR}"
+            OUTPUT_NAME "fixture_${mark}")
+    endforeach()
+    # The refused corpus comes first, where the host would find it before the
+    # good one for the same image.
+    mhfu_configure_overlay_pack(fixture_pack_entry mhfu_overlay_fixture_pack fixture_3 fixture_1 fixture_2)
+    add_library(mhfu_overlay_fixture_pack MODULE "${fixture_pack_entry}" ${fixture_objects})
+    set_target_properties(mhfu_overlay_fixture_pack PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_PACK_FIXTURE_DIR}"
+        OUTPUT_NAME "fixture_pack")
+    foreach(fixture_target IN ITEMS mhfu_overlay_fixture_object_1 mhfu_overlay_fixture_object_2
+            mhfu_overlay_fixture_object_3 mhfu_overlay_fixture_1 mhfu_overlay_fixture_2 mhfu_overlay_fixture_pack)
         target_include_directories(${fixture_target} PRIVATE
             "${MHFU_PROFILE_DIR}/host" "${PROJECT_SOURCE_DIR}/include")
-        target_compile_definitions(${fixture_target} PRIVATE "MHFU_OVERLAY_FIXTURE_MARK=${mark}")
         # The test loads the fixtures, so it cannot be their bundle loader the
         # way Pokee is a real overlay's: ld64 leaves the framework symbols to
         # the loader instead, and the NDK's --no-undefined lets them through as
@@ -1514,28 +1644,35 @@ if(NOT WIN32)
             target_link_options(${fixture_target} PRIVATE "LINKER:-z,undefs")
         endif()
         set_target_properties(${fixture_target} PROPERTIES
+            POSITION_INDEPENDENT_CODE ON
             CXX_VISIBILITY_PRESET hidden
             VISIBILITY_INLINES_HIDDEN ON
-            PREFIX ""
-            LIBRARY_OUTPUT_DIRECTORY "${MHFU_OVERLAY_FIXTURE_DIR}"
-            OUTPUT_NAME "fixture_${mark}")
+            PREFIX "")
     endforeach()
-    add_executable(mhfu_overlay_swap_tests tests/overlay_swap_tests.cpp)
-    target_compile_definitions(mhfu_overlay_swap_tests PRIVATE
-        "MHFU_OVERLAY_FIXTURE_DIR=\"${MHFU_OVERLAY_FIXTURE_DIR}\"")
-    target_include_directories(mhfu_overlay_swap_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
-    target_link_libraries(mhfu_overlay_swap_tests PRIVATE mhfu_test_host)
-    if(APPLE)
-        target_link_options(mhfu_overlay_swap_tests PRIVATE "LINKER:-export_dynamic")
-    else()
-        target_link_options(mhfu_overlay_swap_tests PRIVATE "LINKER:--export-dynamic")
-    endif()
-    add_dependencies(mhfu_overlay_swap_tests mhfu_overlay_fixture_1 mhfu_overlay_fixture_2)
-    set_target_properties(mhfu_overlay_swap_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-    if(PSPRECOMP_BUILD_TESTS)
-        add_test(NAME mhfu_overlay_swap_tests COMMAND mhfu_overlay_swap_tests)
-        set_tests_properties(mhfu_overlay_swap_tests PROPERTIES TIMEOUT 60)
-    endif()
+    # The same test against each directory: CTest names its tests after their
+    # executables, and the loader keeps what it loaded for the whole process.
+    foreach(test_target IN ITEMS mhfu_overlay_swap_tests mhfu_overlay_single_library_tests)
+        add_executable(${test_target} tests/overlay_swap_tests.cpp)
+        if(test_target STREQUAL "mhfu_overlay_swap_tests")
+            set(fixture_dir "${MHFU_OVERLAY_PACK_FIXTURE_DIR}")
+        else()
+            set(fixture_dir "${MHFU_OVERLAY_FIXTURE_DIR}")
+        endif()
+        target_compile_definitions(${test_target} PRIVATE "MHFU_OVERLAY_FIXTURE_DIR=\"${fixture_dir}\"")
+        target_include_directories(${test_target} PRIVATE "${MHFU_PROFILE_DIR}/host")
+        target_link_libraries(${test_target} PRIVATE mhfu_test_host)
+        if(APPLE)
+            target_link_options(${test_target} PRIVATE "LINKER:-export_dynamic")
+        else()
+            target_link_options(${test_target} PRIVATE "LINKER:--export-dynamic")
+        endif()
+        add_dependencies(${test_target} mhfu_overlay_fixture_1 mhfu_overlay_fixture_2 mhfu_overlay_fixture_pack)
+        set_target_properties(${test_target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+        if(PSPRECOMP_BUILD_TESTS)
+            add_test(NAME ${test_target} COMMAND ${test_target})
+            set_tests_properties(${test_target} PROPERTIES TIMEOUT 60)
+        endif()
+    endforeach()
 endif()
 set_target_properties(mhfu_kernel_hle_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)

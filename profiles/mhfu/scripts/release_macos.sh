@@ -41,6 +41,8 @@ repo_dir="$(cd "$profile_dir/../.." && pwd)"
 packaging="$profile_dir/packaging/macos"
 # shellcheck source=../packaging/macos/sources.sh
 source "$packaging/sources.sh"
+# shellcheck source=overlay_libraries.sh
+source "$profile_dir/scripts/overlay_libraries.sh"
 
 work="${POKEE_WORK:-$repo_dir/out/release-macos}"
 sources="$work/sources"
@@ -203,10 +205,8 @@ lipo -archs "$executable" | grep -qx arm64 || fail "$executable is not an arm64 
 if strings -a "$executable" | grep -q '/profiles/mhfu/game$'; then
     fail "$executable is a developer build; configure with -DMHFU_RELEASE=ON, build Pokee and pass it with --executable"
 fi
-overlay_count="$(find "$build_dir/bin/overlays" -name '*.dylib' | wc -l | tr -d ' ')"
-expected_overlays="$(find "$profile_dir/overlays" -mindepth 2 -maxdepth 2 -name meta.txt | wc -l | tr -d ' ')"
-[[ "$overlay_count" -eq "$expected_overlays" ]] ||
-    fail "expected $expected_overlays overlay libraries in $build_dir/bin/overlays, found $overlay_count"
+check_overlay_libraries "$build_dir/bin/overlay_libraries.txt" "$build_dir/bin/overlays" "$profile_dir" .dylib || exit 1
+overlay_count="$overlay_libraries"
 for file in "libavcodec.61.dylib" "libavutil.59.dylib" "FFmpeg-COPYING.LGPLv2.1.txt" "FFmpeg-SOURCE.txt"; do
     [[ -e "$build_dir/bin/lib/$file" ]] || fail "$build_dir/bin/lib/$file is missing; configure with -DMHFU_FFMPEG=bundled"
 done
@@ -418,7 +418,7 @@ leaks="$(grep -rlaF -e "$HOME" -e "/$(id -un)/" -e "$repo_dir" -e "$build_dir" -
 [[ -z "$leaks" ]] || { echo "error: files in Pokee.app name paths of this machine:" >&2; echo "$leaks" >&2; exit 1; }
 echo "no paths of this machine in Pokee.app"
 check_no_game_data "$app" "Pokee.app"
-echo "Pokee.app: $(du -sh "$app" | cut -f1), ${#machos[@]} Mach-O files, $overlay_count overlays"
+echo "Pokee.app: $(du -sh "$app" | cut -f1), ${#machos[@]} Mach-O files, $overlay_count overlay libraries"
 
 # ---------------------------------------------------------------------------
 readme="$stage/Read Me.txt"

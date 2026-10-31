@@ -1,6 +1,11 @@
 // A second overlay copied into an occupied slot must not run the first
 // overlay's compiled body. The game does this before it flushes the
 // instruction cache, so the swap has to be noticed on the call itself.
+//
+// Built twice: against one library holding both corpora and a corpus for
+// another ABI the loader must skip (mhfu_overlay_swap_tests), and against a
+// library per corpus as builds before packs made them
+// (mhfu_overlay_single_library_tests).
 
 #include "overlay_swap_fixture.hpp"
 #include "overlays.hpp"
@@ -30,7 +35,7 @@ void swapped_slot_does_not_run_the_old_body() {
     runtime.memory().copy_in(kOverlayFixtureBase, std::span<const std::uint8_t>(first.data(), first.size()));
     runtime.cpu().gpr[2] = 0u;
     runtime.run(kOverlayFixtureEntry, 1u);
-    check(runtime.cpu().gpr[2] == 1u, "the first image's body did not run");
+    check(runtime.cpu().gpr[2] == 1u, "the first image's body did not run, or a refused corpus did");
 
     runtime.cpu().gpr[2] = 0u;
     runtime.cpu().pc = kOverlayFixtureEntry;

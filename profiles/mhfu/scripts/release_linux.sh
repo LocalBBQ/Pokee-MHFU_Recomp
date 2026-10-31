@@ -28,6 +28,8 @@ repo_dir="$(cd "$profile_dir/../.." && pwd)"
 packaging="$profile_dir/packaging/linux"
 # shellcheck source=../packaging/linux/sources.sh
 source "$packaging/sources.sh"
+# shellcheck source=overlay_libraries.sh
+source "$profile_dir/scripts/overlay_libraries.sh"
 
 app_id=io.github.teamgdb.Pokee
 work="${POKEE_WORK:-$repo_dir/out/release-linux}"
@@ -168,12 +170,8 @@ if [[ $skip_build -eq 0 ]]; then
 fi
 
 [[ -x "$stage/Pokee" ]] || fail "nothing staged in $stage; run without --skip-build"
-overlay_count="$(find "$stage/overlays" -name '*.so' | wc -l)"
-# One library per overlay corpus.
-expected_overlays="$(find "$profile_dir/overlays" -name meta.txt | wc -l)"
-expected_overlays="${expected_overlays//[[:space:]]/}"
-[[ "$overlay_count" -eq "$expected_overlays" ]] ||
-    fail "expected $expected_overlays overlay libraries, found $overlay_count"
+check_overlay_libraries "$work/build/bin/overlay_libraries.txt" "$stage/overlays" "$profile_dir" .so || exit 1
+echo "$overlay_corpora overlay corpora in $overlay_libraries libraries"
 check_no_game_data "$stage" "the staged build"
 rm -rf "$dist"
 mkdir -p "$dist"

@@ -1,7 +1,7 @@
-// Entry point of one overlay library, configured from the overlay's meta.txt by
-// profiles/mhfu/CMakeLists.txt. Everything else in the library is psp_recomp
-// output carrying the @MHFU_OVERLAY_PREFIX@ symbol prefix.
-#define MHFU_OVERLAY_MODULE 1
+// The corpus of one overlay, configured from the overlay's meta.txt by
+// profiles/mhfu/CMakeLists.txt. Everything else it links to is psp_recomp
+// output carrying the @MHFU_OVERLAY_PREFIX@ symbol prefix. The library the
+// overlay is linked into lists this entry (overlay_pack.cpp.in).
 #include "overlay_module.hpp"
 
 #include "psprecomp/runtime.hpp"
@@ -22,10 +22,8 @@ constexpr std::uint32_t kDispatchedCalls[] = {@MHFU_OVERLAY_DISPATCH_LIST@0u};
 
 } // namespace
 
-const mhfu::OverlayModuleInfo *mhfu_overlay_info() { return &kInfo; }
-
-const std::uint32_t *mhfu_overlay_dispatched_calls() { return kDispatchedCalls; }
-
-void mhfu_register_overlay(psprecomp::Runtime &runtime) {
-    psprecomp::register_@MHFU_OVERLAY_PREFIX@_functions(runtime);
-}
+namespace mhfu {
+extern const OverlayCorpusEntry overlay_@MHFU_OVERLAY_PREFIX@;
+const OverlayCorpusEntry overlay_@MHFU_OVERLAY_PREFIX@{
+    &kInfo, &psprecomp::register_@MHFU_OVERLAY_PREFIX@_functions, kDispatchedCalls};
+} // namespace mhfu

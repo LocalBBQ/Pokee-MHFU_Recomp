@@ -1,0 +1,22 @@
+// Entry point of one overlay library, configured by profiles/mhfu/CMakeLists.txt
+// with the corpora linked into it (overlay_module.cpp.in defines each one).
+#define MHFU_OVERLAY_MODULE 1
+#include "overlay_module.hpp"
+
+#include <iterator>
+
+namespace mhfu {
+@MHFU_PACK_DECLARATIONS@
+} // namespace mhfu
+
+namespace {
+
+const mhfu::OverlayCorpusEntry *const kEntries[] = {
+@MHFU_PACK_ENTRIES@
+};
+
+const mhfu::OverlayPack kPack{mhfu::kOverlayAbiVersion, static_cast<std::uint32_t>(std::size(kEntries)), kEntries};
+
+} // namespace
+
+const mhfu::OverlayPack *mhfu_overlay_pack() { return &kPack; }
