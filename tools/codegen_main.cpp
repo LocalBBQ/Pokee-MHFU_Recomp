@@ -87,7 +87,69 @@ std::string reg(std::uint32_t index) {
     return "ctx.gpr[" + std::to_string(index) + "]";
 }
 
+// Site hooks (--site-hooks): instructions after which the generated code calls
+// the profile's hook while hooks are on. Each line of the list is
+//   <image> <address> <word> <site> [what the profile does there]
+// and only the lines of --site-image are read. The word is the instruction
+// the profile read the site off; generation stops if the executable differs.
+struct SiteHookEntry {
+    std::uint32_t word{};
+    std::uint32_t site{};
+};
+std::map<std::uint32_t, SiteHookEntry> g_site_hooks;
+
+std::map<std::uint32_t, SiteHookEntry> parse_site_hooks(std::istream &in, std::string_view image) {
+    std::map<std::uint32_t, SiteHookEntry> sites;
+    std::set<std::uint32_t> numbers;
+    std::string line;
+    for (std::size_t line_number = 1u; std::getline(in, line); ++line_number) {
+        if (const auto comment = line.find('#'); comment != std::string::npos) line.erase(comment);
+        std::istringstream fields(line);
+        std::string name, address_text, word_text, site_text;
+        if (!(fields >> name)) continue;
+        if (!(fields >> address_text >> word_text >> site_text))
+            throw psprecomp::Error(
+                "site hooks line " + std::to_string(line_number) + ": expected image, address, word, site");
+        if (name != image) continue;
+        const std::uint32_t address = parse_hex(address_text);
+        const std::uint32_t site = static_cast<std::uint32_t>(std::stoul(site_text, nullptr, 0));
+        if ((address & 3u) != 0u || site == 0u)
+            throw psprecomp::Error("site hooks line " + std::to_string(line_number) + ": bad address or site");
+        if (!sites.emplace(address, SiteHookEntry{parse_hex(word_text), site}).second || !numbers.insert(site).second)
+            throw psprecomp::Error("site hooks line " + std::to_string(line_number) + ": address or site listed twice");
+    }
+    return sites;
+}
+
+// Every listed word must be in memory as listed, and an instruction the hook
+// can follow: not a branch or a jump.
+void check_site_hooks(const psprecomp::GuestMemory &memory) {
+    for (const auto &[address, entry] : g_site_hooks) {
+        if (!memory.contains(address, 4u))
+            throw psprecomp::Error("site hook " + psprecomp::hex32(address) + " is outside the executable");
+        const std::uint32_t found = memory.load32(address);
+        if (found != entry.word)
+            throw psprecomp::Error("site hook " + psprecomp::hex32(address) + ": expected " +
+                psprecomp::hex32(entry.word) + ", found " + psprecomp::hex32(found));
+        if (psprecomp::decode_allegrex(found).is_control_flow())
+            throw psprecomp::Error("site hook " + psprecomp::hex32(address) + " is a branch or jump");
+    }
+}
+
+std::string emit_instruction(const psprecomp::DecodedInstruction &d, std::uint32_t pc);
+
+// An instruction, then the hook if the site list names it. Delay slots come
+// through here too, so the hook runs wherever the instruction is emitted.
 std::string emit_regular(const psprecomp::DecodedInstruction &d, std::uint32_t pc) {
+    std::string code = emit_instruction(d, pc);
+    if (const auto found = g_site_hooks.find(pc); found != g_site_hooks.end()) {
+        code += "    if (rt.site_hooks_active()) rt.call_site_hook(" + std::to_string(found->second.site) + "u, " +
+            psprecomp::hex32(pc) + "u, ctx);\n";
+    }
+    return code;
+}
+
+std::string emit_instruction(const psprecomp::DecodedInstruction &d, std::uint32_t pc) {
     const auto imm = static_cast<std::int32_t>(d.immediate);
     const auto uimm = static_cast<std::uint16_t>(d.immediate);
     std::ostringstream out;
@@ -1820,6 +1882,8 @@ int generate_auto(const std::filesystem::path &elf_path, const std::filesystem::
     const auto elf = psprecomp::Elf32Image::from_file(elf_path);
     psprecomp::GuestMemory memory(elf.required_ram_size(load_base));
     (void)elf.load_and_relocate(memory, load_base);
+    check_site_hooks(memory);
+    if (!g_site_hooks.empty()) progress(std::to_string(g_site_hooks.size()) + " site hooks");
     progress("analyzing executable");
     std::vector<psprecomp::PspImport> imports;
     if (const auto module = elf.find_module_info(memory, load_base)) imports = elf.scan_imports(memory, *module);
@@ -2026,6 +2090,8 @@ int main(int argc, char **argv) {
     try {
         if (argc >= 4 && std::string_view(argv[2]) == "--auto") {
             std::vector<std::string> positional;
+            std::string site_hooks_path;
+            std::string site_image;
             for (int i = 4; i < argc; ++i) {
                 const std::string_view option(argv[i]);
                 // A prefixed corpus (an overlay) gets its own symbol names and
@@ -2034,7 +2100,22 @@ int main(int argc, char **argv) {
                     g_symbol_prefix = argv[++i];
                     continue;
                 }
+                if (option == "--site-hooks" && i + 1 < argc) {
+                    site_hooks_path = argv[++i];
+                    continue;
+                }
+                if (option == "--site-image" && i + 1 < argc) {
+                    site_image = argv[++i];
+                    continue;
+                }
                 positional.emplace_back(option);
+            }
+            if (site_hooks_path.empty() != site_image.empty())
+                throw psprecomp::Error("--site-hooks and --site-image go together");
+            if (!site_hooks_path.empty()) {
+                std::ifstream in(site_hooks_path);
+                if (!in) throw psprecomp::Error("cannot read " + site_hooks_path);
+                g_site_hooks = parse_site_hooks(in, site_image);
             }
             const std::uint32_t load_base = !positional.empty()
                 ? static_cast<std::uint32_t>(std::stoul(positional[0], nullptr, 0))
@@ -2043,7 +2124,7 @@ int main(int argc, char **argv) {
                 positional.size() > 1u ? static_cast<std::uint32_t>(std::stoul(positional[1], nullptr, 0)) : 0x4000u;
             if (positional.size() > 2u) {
                 std::cerr << "Usage: psp_recomp <ELF> --auto <generated_dir> [load_base_hex] [unit_span_bytes]"
-                          << " [--prefix <symbol_prefix>]\n";
+                          << " [--prefix <symbol_prefix>] [--site-hooks <list> --site-image <name>]\n";
                 return 2;
             }
             if (unit_span == 0u || (unit_span & 3u) != 0u)
@@ -2054,7 +2135,7 @@ int main(int argc, char **argv) {
         std::cerr << "Usage:\n"
                   << "  psp_recomp <ELF> <functions.csv> <generated_manifest.cpp>\n"
                   << "  psp_recomp <ELF> --auto <generated_dir> [load_base_hex] [unit_span_bytes]"
-                  << " [--prefix <symbol_prefix>]\n";
+                  << " [--prefix <symbol_prefix>] [--site-hooks <list> --site-image <name>]\n";
         return 2;
     } catch (const std::exception &e) {
         std::cerr << "psp_recomp error: " << e.what() << "\n";

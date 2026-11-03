@@ -423,6 +423,59 @@ static void test_interpreter_budget_and_disable() {
         "PSPRECOMP_NO_INTERPRETER did not restore the strict dispatch stop");
 }
 
+// Site hooks in the interpreter: after a listed instruction, while hooks are
+// on, the hook runs with the site's number and address; off, or unlisted, the
+// instruction's own result stands. Delay slots count.
+static std::vector<std::pair<std::uint32_t, std::uint32_t>> site_hook_calls;
+static void add_eight_after_site(
+    psprecomp::Runtime &, psprecomp::AllegrexContext &ctx, std::uint32_t site, std::uint32_t address) {
+    site_hook_calls.emplace_back(site, address);
+    ctx.gpr[site == 5u ? 2u : 3u] += 8u;
+}
+
+static void test_interpreter_site_hooks() {
+    psprecomp::Runtime runtime;
+    runtime.register_function(kInterpreterExit, &interpreter_exit_function, "interpreter_exit");
+    load_program(runtime, kInterpreterBase,
+        {
+            mips_i(0x09u, 0u, 2u, 24u),     // addiu v0, zero, 24  site 5
+            mips_r(31u, 0u, 0u, 0u, 0x08u), // jr    ra
+            mips_i(0x09u, 0u, 3u, 24u),     // addiu v1, zero, 24  delay slot, site 6
+        });
+    runtime.set_interpreted_site(kInterpreterBase, 5u);
+    runtime.set_interpreted_site(kInterpreterBase + 8u, 6u);
+    const auto run = [&] {
+        psprecomp::AllegrexContext ctx{};
+        ctx.pc = kInterpreterBase;
+        ctx.gpr[31] = kInterpreterExit;
+        require(psprecomp::interpret_allegrex(runtime, ctx) == psprecomp::InterpreterExit::Dispatch,
+            "Site hook fixture did not reach the registered exit");
+        return std::pair{ctx.gpr[2], ctx.gpr[3]};
+    };
+
+    site_hook_calls.clear();
+    runtime.set_site_hooks_active(true); // no hook set: still off
+    require(!runtime.site_hooks_active(), "Site hooks were on without a hook");
+    require(run() == std::pair{24u, 24u} && site_hook_calls.empty(), "A site ran without a hook");
+
+    runtime.set_site_hook(&add_eight_after_site);
+    runtime.set_site_hooks_active(false);
+    require(run() == std::pair{24u, 24u} && site_hook_calls.empty(), "A site ran while hooks were off");
+
+    runtime.set_site_hooks_active(true);
+    require(run() == std::pair{32u, 32u}, "The hook did not follow the instruction or its delay slot");
+    require(site_hook_calls ==
+            std::vector<std::pair<std::uint32_t, std::uint32_t>>{{5u, kInterpreterBase}, {6u, kInterpreterBase + 8u}},
+        "The hook got the wrong sites");
+    require(runtime.interpreted_site(kInterpreterBase + 4u) == 0u, "An unlisted address had a site");
+
+    site_hook_calls.clear();
+    runtime.clear_interpreted_sites(kInterpreterBase, kInterpreterBase + 4u);
+    require(run() == std::pair{24u, 32u}, "A cleared site still ran");
+    runtime.set_interpreted_site(kInterpreterBase + 8u, 0u);
+    require(run() == std::pair{24u, 24u}, "Site 0 did not remove the site");
+}
+
 static void test_import_return_context_guard() {
     psprecomp::set_runtime_thread_identity(5, "UmdStreamThread");
     const auto worker_context = psprecomp::capture_runtime_execution_context();
@@ -1003,6 +1056,66 @@ static void test_automatic_cfg_and_codegen() {
 #endif
 }
 
+// psp_recomp --site-hooks: the lines of the image asked for become hook calls
+// after their instructions, delay slots included; another image's lines are
+// left out; a word that differs, or a branch, stops generation.
+static void test_codegen_site_hooks() {
+#ifndef PSPRECOMP_CODEGEN_PATH
+    throw std::runtime_error("PSPRECOMP_CODEGEN_PATH was not provided by CMake");
+#else
+    const auto bytes = make_branch_delay_test_elf();
+    const auto root = std::filesystem::temp_directory_path() / "psprecomp_site_hooks_test";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    const auto elf_path = root / "site_hooks.elf";
+    {
+        std::ofstream out(elf_path, std::ios::binary);
+        out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+    const auto generate = [&](const std::string &list, const std::filesystem::path &generated_dir) {
+        const auto list_path = root / "sites.txt";
+        {
+            std::ofstream out(list_path);
+            out << list;
+        }
+        const std::string command = shell_quote(codegen_tool_path()) + " " + shell_quote(elf_path) + " --auto " +
+            shell_quote(generated_dir) + " 0x08804000 64 --site-hooks " + shell_quote(list_path) +
+            " --site-image fixture";
+        return std::system(shell_command(command).c_str());
+    };
+
+    const auto generated_dir = root / "generated";
+    require(generate("# comment\n"
+                     "other   0x08804000 0x24080000 9 set 1\n"
+                     "fixture 0x08804008 0x25080001 3 bound 32 # the delay slot\n"
+                     "fixture 0x08804010 0x24020002 4 set 7\n",
+                generated_dir) == 0,
+        "psp_recomp failed with a site list");
+    std::string text;
+    {
+        std::ifstream generated(generated_dir / "generated_unit_0000.cpp");
+        text.assign((std::istreambuf_iterator<char>(generated)), std::istreambuf_iterator<char>());
+    }
+    const std::string slot_hook = "if (rt.site_hooks_active()) rt.call_site_hook(3u, 0x08804008u, ctx);";
+    const std::string target_hook = "if (rt.site_hooks_active()) rt.call_site_hook(4u, 0x08804010u, ctx);";
+    const auto slot = text.find("ctx.gpr[8] = (ctx.gpr[8] + static_cast<std::uint32_t>(1))");
+    require(slot != std::string::npos && text.find(slot_hook, slot) != std::string::npos,
+        "No hook after the listed delay slot");
+    require(text.find(slot_hook) > slot, "The delay slot's hook came before its instruction");
+    require(text.find(target_hook) != std::string::npos, "No hook after the listed instruction");
+    require(text.find("call_site_hook(9u") == std::string::npos, "Another image's site was emitted");
+
+    require(generate("fixture 0x08804010 0x24020003 4 set 7\n", root / "wrong_word") != 0,
+        "A site whose word differs did not stop generation");
+    require(generate("fixture 0x08804004 0x11000002 4 set 7\n", root / "branch") != 0,
+        "A site on a branch did not stop generation");
+    require(
+        generate("fixture 0x08804010 0x24020002 4 set 7\nfixture 0x0880400C 0x24020001 4 set 7\n", root / "twice") != 0,
+        "A site number listed twice did not stop generation");
+    std::filesystem::remove_all(root);
+#endif
+}
+
 static void test_automatic_cross_unit_tail_chaining() {
 #ifndef PSPRECOMP_CODEGEN_PATH
     throw std::runtime_error("PSPRECOMP_CODEGEN_PATH was not provided by CMake");
@@ -1132,6 +1245,7 @@ int main() {
         test_interpreter_floating_point();
         test_interpreter_dispatch_fallback();
         test_interpreter_budget_and_disable();
+        test_interpreter_site_hooks();
 
         psprecomp::GuestMemory mem;
         mem.store32(0x08800000u, 0x12345678u);
@@ -1930,6 +2044,7 @@ int main() {
         test_codegen_vh2f_lowering();
         test_vfpu_branch_cfg_discovery();
         test_automatic_cfg_and_codegen();
+        test_codegen_site_hooks();
         test_automatic_cross_unit_tail_chaining();
         test_materialized_function_pointer_discovery();
 
