@@ -10,7 +10,7 @@
 // (0x08816F88) and again when it is chosen (0x0881CF64, 0x0881D24C); 1 is yes.
 // It reads the item id from the pouch slot in the hunter's byte at +1414
 // (0x08826734, through 0x08856884: GameSys + 0x6AEA6 + 4 * slot, slot 0 for
-// 25 or more) and answers 0 when the rarity, byte 2 of the item's 24-byte
+// 25 or more; 33 or more with the fourth pouch page) and answers 0 when the rarity, byte 2 of the item's 24-byte
 // record in the table at 0x0899D2B8, is not below 3 (0x08829988, slti 3).
 // Rarity 0 is Rare 1. Its other checks (the record's byte 3 is not 255, the
 // session and the stage) follow.
@@ -33,7 +33,6 @@ namespace mhfu::game::give_rarity {
 inline constexpr std::uint32_t kCanGive = 0x08829928u;
 inline constexpr std::uint32_t kGameSysPointer = 0x089CC558u;
 inline constexpr std::uint32_t kPouch = 0x6AEA6u;
-inline constexpr std::uint32_t kPouchSlots = 25u; // 0x08856884 takes 0 to 24
 inline constexpr std::uint32_t kSelectedSlot = 1414u;
 inline constexpr std::uint32_t kItemTable = 0x0899D2B8u;
 inline constexpr std::uint32_t kItemRecord = 24u;
