@@ -24,7 +24,7 @@
 // No array can grow in place, so a hunter with the page gets four arrays of
 // 32 in the window the host reserves below the load image (kernel/kernel.hpp),
 // and the code that reaches them is changed where it runs: config/site_hooks.txt
-// lists 192 instructions, and the recompiler (psp_recomp --site-hooks) has the
+// lists 197 instructions, and the recompiler (psp_recomp --site-hooks) has the
 // generated code call the host after each of them while the hooks are on.
 // After each, the host changes the registers the instruction set:
 //
