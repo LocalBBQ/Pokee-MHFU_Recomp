@@ -1176,6 +1176,29 @@ void Runtime::unregister_functions(std::uint32_t start, std::uint32_t end) {
     if (removed) chain_context_invalidated_ = true;
 }
 
+void Runtime::set_interpreted_site(std::uint32_t address, std::uint32_t site) {
+    if (site == 0u) {
+        interpreted_sites_.erase(memory_.canonical(address));
+        return;
+    }
+    interpreted_sites_[memory_.canonical(address)] = site;
+}
+
+void Runtime::clear_interpreted_sites(std::uint32_t start, std::uint32_t end) {
+    for (auto it = interpreted_sites_.begin(); it != interpreted_sites_.end();) {
+        if (it->first >= memory_.canonical(start) && it->first < memory_.canonical(start) + (end - start))
+            it = interpreted_sites_.erase(it);
+        else
+            ++it;
+    }
+}
+
+std::uint32_t Runtime::interpreted_site(std::uint32_t address) const noexcept {
+    if (interpreted_sites_.empty()) return 0u;
+    const auto found = interpreted_sites_.find(memory_.canonical(address));
+    return found == interpreted_sites_.end() ? 0u : found->second;
+}
+
 void Runtime::register_native_fast_path(std::uint32_t address, NativeFastPath function) {
     const std::uint32_t canonical_address = memory_.canonical(address);
     if (!function) {

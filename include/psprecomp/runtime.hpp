@@ -123,6 +123,28 @@ public:
     // Removes every registration in [start, end). A profile calls this before
     // installing a different overlay into the same guest address window.
     void unregister_functions(std::uint32_t start, std::uint32_t end);
+
+    // Site hooks. A profile lists instructions for psp_recomp --site-hooks, and
+    // the generated code calls the hook right after each of them while hooks
+    // are on. The hook gets the site's number and address from the list and
+    // may change any register, so a profile can change what a compiled
+    // instruction computed without patching code. Off, a listed instruction
+    // costs one test. The interpreter runs the hook after the addresses given
+    // to set_interpreted_site, for code that runs from memory. Site numbers
+    // start at 1.
+    using SiteHook = void (*)(Runtime &, AllegrexContext &, std::uint32_t site, std::uint32_t address);
+    void set_site_hook(SiteHook hook) noexcept { site_hook_ = hook; }
+    void set_site_hooks_active(bool active) noexcept { site_hooks_active_ = active; }
+    [[nodiscard]] bool site_hooks_active() const noexcept { return site_hooks_active_ && site_hook_ != nullptr; }
+    void call_site_hook(std::uint32_t site, std::uint32_t address, AllegrexContext &ctx) {
+        site_hook_(*this, ctx, site, address);
+    }
+    void set_interpreted_site(std::uint32_t address, std::uint32_t site);
+    // Forgets the sites in [start, end), as when another overlay is installed there.
+    void clear_interpreted_sites(std::uint32_t start, std::uint32_t end);
+    // The site at `address` for the interpreter, or 0.
+    [[nodiscard]] std::uint32_t interpreted_site(std::uint32_t address) const noexcept;
+
     void register_native_fast_path(std::uint32_t address, NativeFastPath function);
     void invoke_native_fast_path(std::uint32_t address, AllegrexContext &ctx);
 
@@ -342,6 +364,11 @@ private:
     // cache line on every native chained call during normal gameplay.
     bool track_dispatch_counters_{};
     std::unordered_map<std::string, std::uint64_t> hle_histogram_;
+    // Last, so the members above keep their offsets for code built against
+    // a header without site hooks (the overlay libraries that call none).
+    SiteHook site_hook_{};
+    bool site_hooks_active_{};
+    std::unordered_map<std::uint32_t, std::uint32_t> interpreted_sites_;
 };
 
 // Identifies the PSP execution context that entered a host import wrapper.
