@@ -109,7 +109,7 @@ void test_parse() {
 // actions need of their instructions.
 void test_built_in_list() {
     const auto &list = sites();
-    check(list.size() == 192u, "the built-in list is not the 192 sites");
+    check(list.size() == 197u, "the built-in list is not the 197 sites");
     std::set<std::uint32_t> numbers;
     std::set<std::pair<std::string, std::uint32_t>> places;
     for (const Site &site : list) {
@@ -140,6 +140,11 @@ void test_built_in_list() {
     }
     check(numbers.size() == list.size() && *numbers.begin() == 1u && *numbers.rbegin() == list.size(),
         "the site numbers are not 1 to the count");
+    // Regression: without the bounds of the slot helpers beside 0x08856884 (how many of an item the
+    // pouch holds, its room, the slot of an item), throwing knives on the fourth page were thrown and
+    // never used up.
+    for (const std::uint32_t helper : {0x088568F8u, 0x088569B0u, 0x08856AC4u, 0x08857598u, 0x0886CA2Cu})
+        check(places.contains({"eboot", helper}), "a slot helper's bound is missing from the list");
 }
 
 void test_slot_address() {

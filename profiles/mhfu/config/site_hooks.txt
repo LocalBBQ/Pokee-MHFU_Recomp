@@ -206,3 +206,8 @@ em59         0x09D1E240 0x27B00020  189 set W1
 em59         0x09D1E314 0x005D1021  190 rebase sp W2-0x80
 em59         0x09D1E34C 0x005D1021  191 rebase sp W1-0x20
 em59         0x09D1E2E8 0x2A830018  192 bound 32
+eboot        0x088568F8 0x2A220018  193 bound 32
+eboot        0x088569B0 0x2A020018  194 bound 32
+eboot        0x08856AC4 0x2A620018  195 bound 32
+eboot        0x08857598 0x2A220018  196 bound 32
+eboot        0x0886CA2C 0x2A020018  197 bound 32
