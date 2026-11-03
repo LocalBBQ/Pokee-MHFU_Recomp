@@ -995,6 +995,16 @@ void report_interpreter_stats(std::size_t limit) {
     }
 }
 
+namespace {
+
+// The profile's hook after a listed instruction, as the generated code calls it.
+void run_site_hook(Runtime &rt, AllegrexContext &ctx, std::uint32_t pc) {
+    if (!rt.site_hooks_active()) return;
+    if (const std::uint32_t site = rt.interpreted_site(pc); site != 0u) rt.call_site_hook(site, pc, ctx);
+}
+
+} // namespace
+
 InterpreterExit interpret_allegrex(Runtime &rt, AllegrexContext &ctx, std::uint64_t instruction_budget) {
     load_settings();
     const std::uint64_t budget = instruction_budget != 0u ? instruction_budget : g_budget;
@@ -1039,6 +1049,7 @@ InterpreterExit interpret_allegrex(Runtime &rt, AllegrexContext &ctx, std::uint6
         if (!decoded.has_delay_slot()) {
             if (!execute_simple(rt, ctx, decoded, pc))
                 return leave(rt.stopped() ? InterpreterExit::Stopped : InterpreterExit::Dispatch);
+            run_site_hook(rt, ctx, pc);
             pc += 4u;
             continue;
         }
@@ -1092,6 +1103,7 @@ InterpreterExit interpret_allegrex(Runtime &rt, AllegrexContext &ctx, std::uint6
             ctx.pc = pc + 4u;
             if (!execute_simple(rt, ctx, slot, pc + 4u))
                 return leave(rt.stopped() ? InterpreterExit::Stopped : InterpreterExit::Dispatch);
+            run_site_hook(rt, ctx, pc + 4u);
         }
         pc = next;
     }
