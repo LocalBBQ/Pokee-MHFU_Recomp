@@ -22,8 +22,9 @@ mkdir -p "$profile_dir/analysis"
 "$build_dir/psp_analyze" "$elf" "$profile_dir/analysis/report.json"
 # Regenerate in place: psp_recomp rewrites only units whose text changed and
 # removes units that no longer exist, so unchanged units keep their timestamps
-# and are not recompiled.
-"$build_dir/psp_recomp" "$elf" --auto "$profile_dir/generated"
+# and are not recompiled. The site hooks are the host's (config/site_hooks.txt).
+"$build_dir/psp_recomp" "$elf" --auto "$profile_dir/generated" \
+    --site-hooks "$profile_dir/config/site_hooks.txt" --site-image eboot
 if command -v sha256sum > /dev/null; then
     elf_sha256="$(sha256sum "$elf" | cut -d' ' -f1)"
 else

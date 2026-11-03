@@ -95,8 +95,11 @@ def main(argv):
     subprocess.run([sys.executable, os.path.join(PROFILE_DIR, "tools", "wrap_overlay.py"),
                     code_path, code_base_text, elf_path], check=True)
     os.remove(code_path)
+    # The host's site hooks for this overlay, by its name (config/site_hooks.txt).
+    site_hooks = os.path.join(PROFILE_DIR, "config", "site_hooks.txt")
     subprocess.run([recompiler, elf_path, "--auto", target,
-                    code_base_text, "--prefix", prefix], cwd=build_dir, check=True)
+                    code_base_text, "--prefix", prefix,
+                    "--site-hooks", site_hooks, "--site-image", name], cwd=build_dir, check=True)
     # The metadata the host identifies the corpus by. CMake reads it to configure
     # the library entry point. The build does not need an explicit reconfigure:
     # the CONFIGURE_DEPENDS glob over overlays/*/meta.txt notices the new

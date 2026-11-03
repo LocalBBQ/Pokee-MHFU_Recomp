@@ -1,5 +1,6 @@
 #include "game/give_rarity.hpp"
 
+#include "game/pouch_slots.hpp"
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
 
@@ -70,9 +71,10 @@ bool code_matches(const psprecomp::GuestMemory &memory) {
 std::optional<std::uint32_t> rarity_address(const psprecomp::GuestMemory &memory, std::uint32_t hunter) {
     if (!memory.contains(hunter + kSelectedSlot, 1u) || !memory.contains(kGameSysPointer, 4u)) return std::nullopt;
     std::uint32_t slot = memory.load8(hunter + kSelectedSlot);
-    if (slot >= kPouchSlots) slot = 0u;
-    const std::uint32_t entry = memory.load32(kGameSysPointer) + kPouch + slot * 4u;
-    if (!memory.contains(entry, 2u)) return std::nullopt;
+    // 0 to 24, or to 32 with the fourth pouch page (game/pouch_slots.hpp).
+    if (slot > pouch_slots::count()) slot = 0u;
+    const std::uint32_t entry = pouch_slots::address(memory.load32(kGameSysPointer), slot);
+    if (entry == 0u || !memory.contains(entry, 2u)) return std::nullopt;
     // 0x08826734 loads the id with lh and the check indexes the table with it.
     const std::int16_t id = static_cast<std::int16_t>(memory.load16(entry));
     if (id <= 0) return std::nullopt;

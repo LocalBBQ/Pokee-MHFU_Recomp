@@ -13,6 +13,7 @@
 #include "hle_common.hpp"
 #include "utility_dialog.hpp"
 
+#include "game/pouch_page.hpp"
 #include "save_data/savedata_crypto.hpp"
 #include "save_data/savedata_store.hpp"
 #include "save_data/save_transfer.hpp"
@@ -235,6 +236,7 @@ std::uint32_t do_load(psprecomp::GuestMemory &memory, std::uint32_t params, cons
     if (data.size() > capacity)
         std::cerr << "[savedata] " << files.file_name << " holds " << data.size() << " bytes; the buffer takes "
                   << capacity << "\n";
+    game::pouch_page::game_loaded();
     return result::kOk;
 }
 
@@ -263,6 +265,8 @@ std::uint32_t do_save(psprecomp::GuestMemory &memory, std::uint32_t params, cons
     std::cerr << "[savedata] saved " << size << " bytes to "
               << path_to_utf8(savedata::save_folder(state().memory_stick, files)) << (files.key ? " (encrypted)" : "")
               << "\n";
+    // The fourth pouch page is kept with each save the game writes.
+    game::pouch_page::game_saved(memory);
     return result::kOk;
 }
 

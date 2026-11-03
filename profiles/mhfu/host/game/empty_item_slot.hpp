@@ -24,6 +24,10 @@
 // two scroll calls itself. A step that would wrap round the end lands on the
 // empty stop instead. From there ○ goes to the first item and □ to the last.
 //
+// With the fourth pouch page (game/pouch_page.hpp) the pouch is 32 slots in a
+// block of the host's and the stop is slot 32, which the page's hooks give the
+// address of that same word; the rest is as below with 32 for 24.
+//
 // The empty stop is slot 24, the word just past the pouch. 0x08856884 bounds
 // a slot by 25 and so still gives its address, while the game's own walk over
 // the pouch stops at 24 (0x088568F8), so no item is put there. A full pouch
@@ -128,8 +132,17 @@ struct Slot {
     std::uint16_t count{};
     bool on_bar{}; // an id the step stops at
 };
-// The 24 slots and then the spare, never on the bar.
-using Pouch = std::array<Slot, kSlots + 1u>;
+// The slots and then the spare, never on the bar: 24 slots, or 32 with the
+// fourth pouch page (game/pouch_slots.hpp), whose spare is the 25th word the
+// game keeps after its own 24.
+inline constexpr std::uint16_t kMostSlots = 32u;
+struct Pouch {
+    std::array<Slot, kMostSlots + 1u> slot{};
+    std::uint16_t slots{kSlots};
+    [[nodiscard]] std::uint16_t spare() const noexcept { return slots; }
+    Slot &operator[](std::size_t i) noexcept { return slot[i]; }
+    const Slot &operator[](std::size_t i) const noexcept { return slot[i]; }
+};
 
 struct CodeWord {
     std::uint32_t address;

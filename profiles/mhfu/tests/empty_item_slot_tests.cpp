@@ -3,6 +3,7 @@
 // game data.
 #include "game/empty_item_slot.hpp"
 
+#include "game/pouch_slots.hpp"
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
 
@@ -133,8 +134,7 @@ void test_scroll() {
     check(scroll(none, 3, Direction::Forward) == 3u && scroll(none, 3, Direction::Backward) == 3u,
         "with nothing to select the slot stays");
     check(scroll(none, kSpare, Direction::Forward) == kSpare, "nor from the empty stop");
-    check(scroll(three, kSpare + 1u, Direction::Forward) == kSpare + 1u,
-        "a slot past the spare stays, as in the game");
+    check(scroll(three, kSpare + 1u, Direction::Forward) == kSpare + 1u, "a slot past the spare stays, as in the game");
     check(game_step(three, 2, Direction::Forward) == std::optional<std::uint16_t>{0u} &&
             game_step(three, 0, Direction::Backward) == std::optional<std::uint16_t>{2u},
         "the game's own step wraps round");
@@ -202,6 +202,35 @@ void test_read_pouch() {
     memory.store16(kHunter + kHunterIndex, 2u);
     memory.store32(kGameSysPointer, 0x7FFFFFF0u);
     check(!read_pouch(memory, kHunter), "no game state is left to the game");
+}
+
+// With the fourth pouch page: 32 slots, and the spare is slot 32.
+void test_fourth_page() {
+    Pouch three{};
+    three.slots = kMostSlots;
+    for (const std::uint16_t slot : {0, 1, 30}) three[slot] = Slot{static_cast<std::uint16_t>(100u + slot), 1u, true};
+    check(scroll(three, 1, Direction::Forward) == 30u, "○ reaches an item on the fourth page");
+    check(scroll(three, 30, Direction::Forward) == kMostSlots, "past the last item ○ stops on slot 32");
+    check(scroll(three, kMostSlots, Direction::Backward) == 30u, "from the stop □ goes to the fourth page's item");
+    check(scroll(three, 0, Direction::Backward) == kMostSlots, "before the first item □ stops on slot 32");
+    check(strip_step(three, 30, Direction::Forward) == kNone, "the strip shows the stop after the last item");
+    three[kMostSlots] = Slot{0x80u, 0xFFu, false}; // the bow's coatings
+    check(empty_slot(three) == std::optional<std::uint16_t>{31u}, "with slot 32 in use the stop is the last free slot");
+
+    psprecomp::GuestMemory memory(32u * 1024u * 1024u);
+    set_up_hunter(memory);
+    mhfu::game::pouch_slots::fourth_page() = true;
+    memory.store16(mhfu::game::pouch_slots::kBlock + 27u * 4u, 1u);
+    memory.store16(mhfu::game::pouch_slots::kBlock + 27u * 4u + 2u, 6u);
+    const std::optional<Pouch> pouch = read_pouch(memory, kHunter);
+    check(pouch && pouch->slots == kMostSlots && (*pouch)[27].item == 1u && (*pouch)[27].count == 6u &&
+            (*pouch)[27].on_bar,
+        "the fourth page is read from the host's block");
+    check(pouch && (*pouch)[0].item == 0u, "the game's own slots are not read with the page on");
+    check(slot_empty(memory, kMostSlots) && !slot_empty(memory, 27u) && !slot_empty(memory, kMostSlots + 1u),
+        "slot 32 is the stop, slot 27 holds an item, and 33 is no slot");
+    mhfu::game::pouch_slots::fourth_page() = false;
+    check(read_pouch(memory, kHunter)->slots == kSlots, "off, the pouch is 24 slots again");
 }
 
 void write_call(psprecomp::GuestMemory &memory, std::uint32_t return_address, std::uint32_t direction) {
@@ -410,6 +439,7 @@ int main() {
     test_scroll();
     test_strip();
     test_read_pouch();
+    test_fourth_page();
     test_scroll_direction();
     test_code_check();
     test_missing_functions();

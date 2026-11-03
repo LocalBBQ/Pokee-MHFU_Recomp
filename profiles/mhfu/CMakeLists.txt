@@ -286,6 +286,7 @@ set(MHFU_HOST_SOURCES
     host/game/guest_calls.cpp
     host/game/item_sets.cpp
     host/game/item_sets_menu.cpp
+    host/game/pouch_page.cpp
     host/game/sharpness_gauge.cpp
     third_party/tiny_aes/aes.c
 )
@@ -389,6 +390,20 @@ add_custom_command(
     COMMENT "Embedding the NID table")
 target_sources(Pokee PRIVATE "${MHFU_NIDS_INC}")
 target_include_directories(Pokee PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
+
+# The site hooks list (config/site_hooks.txt) is compiled in too: the
+# recompiler reads it to emit the hooks, the host to know what each does.
+set(MHFU_SITE_HOOKS "${MHFU_PROFILE_DIR}/config/site_hooks.txt")
+set(MHFU_SITE_HOOKS_INC "${CMAKE_CURRENT_BINARY_DIR}/generated_sites/site_hooks.inc")
+add_custom_command(
+    OUTPUT "${MHFU_SITE_HOOKS_INC}"
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${MHFU_SITE_HOOKS} -DOUTPUT=${MHFU_SITE_HOOKS_INC}
+            -P "${MHFU_PROFILE_DIR}/tools/embed_text.cmake"
+    DEPENDS "${MHFU_SITE_HOOKS}" "${MHFU_PROFILE_DIR}/tools/embed_text.cmake"
+    COMMENT "Embedding the site hooks list")
+add_custom_target(mhfu_site_hooks DEPENDS "${MHFU_SITE_HOOKS_INC}")
+add_dependencies(Pokee mhfu_site_hooks)
+target_include_directories(Pokee PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated_sites")
 
 # A release build runs from wherever it is unpacked: it has no fallback to
 # this checkout's game directory, and on Linux it finds the libraries it ships
@@ -633,6 +648,36 @@ target_link_libraries(mhfu_item_sets_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_item_sets_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_item_sets_tests COMMAND mhfu_item_sets_tests)
+endif()
+
+# Fourth pouch page: the site list built in, what each action does to the
+# registers, the blocks beside the game's arrays, the pages file, and the
+# frame, save and load on a runtime. No game data.
+add_executable(mhfu_pouch_page_tests
+    tests/pouch_page_tests.cpp
+    host/game/pouch_page.cpp
+    host/game/game_data.cpp
+    host/game/guest_calls.cpp
+    host/game/item_sets.cpp
+    host/game/hooks.cpp
+    host/game/item_sets_menu.cpp
+    host/game/guest_ram.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+add_dependencies(mhfu_pouch_page_tests mhfu_site_hooks)
+target_include_directories(mhfu_pouch_page_tests PRIVATE
+    "${MHFU_PROFILE_DIR}/host" "${CMAKE_CURRENT_BINARY_DIR}/generated_sites")
+target_link_libraries(mhfu_pouch_page_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_pouch_page_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_pouch_page_tests COMMAND mhfu_pouch_page_tests)
 endif()
 
 # Fast item box: the shortened wait, the lobby_task code check, and the wrapper
@@ -1318,9 +1363,10 @@ target_compile_definitions(mhfu_imgui_font_bitmap_tests PRIVATE TEST_IMGUI_STB)
 
 # Synthetic HLE suites link the real headless host with a public empty registry.
 add_library(mhfu_test_host STATIC ${MHFU_HOST_SOURCES} host/generated_stub.cpp "${MHFU_NIDS_INC}")
+add_dependencies(mhfu_test_host mhfu_site_hooks)
 target_include_directories(mhfu_test_host PUBLIC
     "${MHFU_PROFILE_DIR}/host" "${MHFU_PROFILE_DIR}/third_party"
-    "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
+    "${CMAKE_CURRENT_BINARY_DIR}/generated_nids" "${CMAKE_CURRENT_BINARY_DIR}/generated_sites")
 target_link_libraries(mhfu_test_host PUBLIC psprecomp_core Threads::Threads ${CMAKE_DL_LIBS})
 mhfu_use_ffmpeg(mhfu_test_host)
 if(WIN32)
