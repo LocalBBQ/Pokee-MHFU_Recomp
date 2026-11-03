@@ -1,0 +1,208 @@
+# Site hooks: instructions after which the generated code calls the host's hook
+# (psp_recomp --site-hooks, include/psprecomp/runtime.hpp). The recompiler reads
+# the first four fields of the lines for the image it compiles; the host reads
+# them all (game/pouch_page.hpp has what each action does).
+#
+#   <image> <address> <word> <site> <action> [arguments]
+#
+# The image is "eboot" or an overlay's name. The word is the instruction at the
+# address in USA Freedom Unite (ULUS-10391), and generation stops if it is not
+# there. Site numbers are never reused. After editing this list, regenerate the
+# executable (scripts/generate.sh) and the overlays named in it
+# (scripts/build_overlays.sh).
+#
+# Fourth pouch page (game/pouch_page.hpp). Values: P the pouch, C the pouch as
+# saved, B the pouch kept aside while a quest lends its own items, S the
+# hunter's copy, W1 to W3 the lists of slots some functions keep on the stack.
+eboot        0x08856884 0x28A20019    1 bound 33
+eboot        0x088568A8 0x00411021    2 pouch_slot
+eboot        0x08817C40 0x28A20018    3 bound 32
+eboot        0x08817F8C 0x28A20018    4 bound 32
+eboot        0x08817364 0x248243C8    5 set C
+eboot        0x08819810 0x24040018    6 set 32
+eboot        0x08819844 0x24020018    7 set 32
+eboot        0x088197F8 0x244243C8    8 set C
+eboot        0x08819808 0x27A60020    9 set W3
+eboot        0x08819850 0x27A40020   10 set W3
+eboot        0x08819868 0x27A40020   11 set W3
+eboot        0x08819878 0x27A20020   12 set W3
+eboot        0x088199E8 0x24070003   13 set 4
+eboot        0x0881C1EC 0x24070018   14 set 32
+eboot        0x0881D918 0x24070018   15 set 32
+eboot        0x0881DD70 0x24070018   16 set 32
+eboot        0x0881E044 0x24070018   17 set 32
+eboot        0x0881E190 0x24070018   18 set 32
+eboot        0x08824924 0x24070018   19 set 32
+eboot        0x0881DB9C 0x28420018   20 bound 32
+eboot        0x0881DF68 0x2E020018   21 bound 32
+eboot        0x0881E508 0x28410018   22 bound 32
+eboot        0x0881DF3C 0x24020017   23 set 31
+eboot        0x08829328 0x244243C8   24 set C
+eboot        0x08829350 0x24030018   25 set 32
+eboot        0x088293FC 0x24030018   26 set 32
+eboot        0x08829600 0x24110018   27 set 32
+eboot        0x088294E0 0x2CA30018   28 bound 32
+eboot        0x08829520 0x2CA30018   29 bound 32
+eboot        0x0882956C 0x2CA30018   30 bound 32
+eboot        0x08829634 0x2A020018   31 bound 32
+eboot        0x088470F4 0x2A420018   32 bound 32
+eboot        0x08874BD0 0x2A220018   33 bound 32
+eboot        0x08879254 0x2A220018   34 bound 32
+eboot        0x0887D490 0x28850018   35 bound 32
+eboot        0x088D6954 0x245104A0   36 set C-0x3F28
+eboot        0x088D6950 0x02608021   37 set S-0x568
+eboot        0x088D69C0 0x2A430018   38 bound 32
+eboot        0x088D7284 0x2A020018   39 bound 32
+eboot        0x088D7510 0x2AA20018   40 bound 32
+eboot        0x088D76FC 0x2AA20018   41 bound 32
+eboot        0x088D7744 0x00802821   42 set S-0x568
+eboot        0x088D7758 0x00441021   43 rebase a0 S-0x568
+eboot        0x088D7764 0x28C20018   44 bound 32
+eboot        0x088D7888 0x02A02021   45 set S-0x568
+eboot        0x088D789C 0x00552021   46 rebase s5 S-0x568
+eboot        0x088D78D0 0x28A20018   47 bound 32
+eboot        0x088D7B60 0x24020018   48 set 32
+eboot        0x088D84F8 0x24050018   49 set 32
+eboot        0x088D7B64 0x24020019   50 set 33
+eboot        0x088D8240 0x28420018   51 bound 32
+eboot        0x088D826C 0x2A020018   52 bound 32
+eboot        0x088D82D4 0x2A220018   53 bound 32
+eboot        0x088D8360 0x2A220018   54 bound 32
+eboot        0x088D83DC 0x2A220018   55 bound 32
+eboot        0x088D8300 0x24100017   56 set 31
+eboot        0x0885AD04 0x249004A0   57 set C-0x3F28
+eboot        0x0885AEE4 0x244404A0   58 set C-0x3F28
+eboot        0x0885AF38 0x244404A0   59 set C-0x3F28
+eboot        0x0885B00C 0x248404A0   60 set C-0x3F28
+eboot        0x08852DF8 0x248304A0   61 set C-0x3F28
+eboot        0x0885AD94 0x28C20018   62 bound 32
+eboot        0x0885AE9C 0x28A20018   63 bound 32
+eboot        0x0885AF10 0x28C20018   64 bound 32
+eboot        0x0885AFB8 0x29020018   65 bound 32
+eboot        0x0885B004 0x28620018   66 bound 32
+eboot        0x08852E20 0x28A20018   67 bound 32
+eboot        0x08869F2C 0x00412021   68 set B
+eboot        0x08869F24 0x245004A0   69 set C-0x3F28
+eboot        0x08869F28 0x24060060   70 set 0x80
+eboot        0x08869F80 0x28620018   71 bound 32
+eboot        0x0887EAD4 0x26243F28   72 set C
+eboot        0x0887EB5C 0x244443C8   73 set C
+eboot        0x08874208 0x246443C8   74 set C
+eboot        0x088D892C 0x246443C8   75 set C
+eboot        0x088D895C 0x260543C8   76 set C
+eboot        0x0887EADC 0x02002821   77 set B
+eboot        0x0887EB64 0x00412821   78 set B
+eboot        0x088741FC 0x24450568   79 set S
+eboot        0x0887EAD0 0x24060060   80 set 0x80
+eboot        0x0887EB58 0x24060060   81 set 0x80
+eboot        0x08874200 0x24060060   82 set 0x80
+eboot        0x088D8924 0x24060060   83 set 0x80
+eboot        0x088D8968 0x24060060   84 set 0x80
+eboot        0x088DA248 0x24050002   85 setreg s0 C-0x3F28
+eboot        0x088DA2A0 0x29030018   86 bound 32
+eboot        0x088D8150 0x00621021   87 direct
+eboot        0x088D81A0 0x00831821   88 direct
+lobby_task   0x09ADD38C 0x02231821   89 rebase s1 C-0x3F28
+lobby_task   0x09ADD6D4 0x00511021   90 rebase s1 C-0x3F28
+lobby_task   0x09ADD6F4 0x00511021   91 rebase s1 C-0x3F28
+lobby_task   0x09ADD710 0x00711821   92 rebase s1 C-0x3F28
+lobby_task   0x09ADD73C 0x00511821   93 rebase s1 C-0x3F28
+lobby_task   0x09ADD754 0x00511821   94 rebase s1 C-0x3F28
+lobby_task   0x09ADD7B0 0x00513021   95 rebase s1 C-0x3F28
+lobby_task   0x09ADD938 0x02221021   96 rebase s1 C-0x3F28
+lobby_task   0x09ADDB74 0x02221021   97 rebase s1 C-0x3F28
+lobby_task   0x09ADDBC4 0x00513021   98 rebase s1 C-0x3F28
+lobby_task   0x09ADDC70 0x00511821   99 rebase s1 C-0x3F28
+lobby_task   0x09ADDFA4 0x02231821  100 rebase s1 C-0x3F28
+lobby_task   0x09ADE1A0 0x00511021  101 rebase s1 C-0x3F28
+lobby_task   0x09ADE210 0x00711821  102 rebase s1 C-0x3F28
+lobby_task   0x09ADE2EC 0x00511021  103 rebase s1 C-0x3F28
+lobby_task   0x09ADE398 0x00511021  104 rebase s1 C-0x3F28
+lobby_task   0x09ADE3F0 0x00511021  105 rebase s1 C-0x3F28
+lobby_task   0x09ADE544 0x00512821  106 rebase s1 C-0x3F28
+lobby_task   0x09ADE690 0x00712021  107 rebase s1 C-0x3F28
+lobby_task   0x09ADE830 0x00711821  108 rebase s1 C-0x3F28
+lobby_task   0x09ADE8B8 0x00511021  109 rebase s1 C-0x3F28
+lobby_task   0x09ADEA40 0x00511021  110 rebase s1 C-0x3F28
+lobby_task   0x09ADEABC 0x02221021  111 rebase s1 C-0x3F28
+lobby_task   0x09AE7FC8 0x00501021  112 rebase s0 C-0x3F28
+lobby_task   0x09AE80E4 0x00A31821  113 rebase gamesys C-0x43C8
+lobby_task   0x09AE816C 0x00431021  114 rebase v1 C-0x3F28
+lobby_task   0x09ADDD88 0x02201821  115 set C-0x3F28
+lobby_task   0x09ADDDA0 0x2C820018  116 bound 32
+lobby_task   0x09ADDB60 0x28810018  117 bound 32
+lobby_task   0x09ADDB68 0x28810018  118 bound 32
+lobby_task   0x09ADDBA4 0x28820018  119 bound 32
+lobby_task   0x09ADDBB0 0x28810018  120 bound 32
+lobby_task   0x09ADEAA4 0x28810018  121 bound 32
+lobby_task   0x09ADEAAC 0x28820018  122 bound 32
+lobby_task   0x09ADEADC 0x28820018  123 bound 32
+lobby_task   0x09ADEAE8 0x28820018  124 bound 32
+lobby_task   0x09ADD378 0x24070018  125 set 32
+lobby_task   0x09ADE194 0x24070018  126 set 32
+lobby_task   0x09A7F374 0x00009021  127 setreg s4 C-0x3F28
+lobby_task   0x09A7F3D8 0x2A430018  128 bound 32
+lobby_task   0x09A7F3E8 0x24030018  129 set 32
+lobby_task   0x09A7F3F0 0x24110003  130 set 4
+lobby_task   0x09A7FA98 0x247004A0  131 set C-0x3F28
+lobby_task   0x09A7FCA0 0x28C20018  132 bound 32
+lobby_task   0x09AE6CCC 0x00431021  133 rebase gamesys C-0x43C8
+game_task    0x09A65A54 0x00621021  134 direct
+game_task    0x09A65AA4 0x00621021  135 direct
+game_task    0x09B619B8 0x00E21021  136 direct
+game_task    0x09B619CC 0x00E21021  137 direct
+game_task    0x09B61C2C 0x00831821  138 direct
+game_task    0x09B61C40 0x00831821  139 direct
+game_task    0x09B61C90 0x00621021  140 direct
+game_task    0x09B61CB4 0x00431821  141 direct
+game_task    0x09BA3770 0x00621021  142 direct
+game_task    0x09BB51CC 0x00621021  143 direct
+game_task    0x09BB5200 0x00831821  144 direct
+game_task    0x09BB523C 0x00621021  145 direct
+game_task    0x09BB65BC 0x00621021  146 direct
+game_task    0x09BB6628 0x00831821  147 direct
+game_task    0x09BB6854 0x00831821  148 direct
+game_task    0x09BB6A64 0x00831821  149 direct
+game_task    0x09BB6D6C 0x00C31821  150 direct
+game_task    0x09A659A0 0x24050018  151 set 32
+game_task    0x09A659B8 0x24050018  152 set 32
+game_task    0x09BB5214 0x24050018  153 set 32
+game_task    0x09A681EC 0x2A030018  154 bound 32
+game_task    0x09A76D48 0x2A620018  155 bound 32
+game_task    0x09A9A2E0 0x2A220018  156 bound 32
+game_task    0x09AF45B0 0x2A420018  157 bound 32
+game_task    0x09B38920 0x2AA30018  158 bound 32
+game_task    0x09B61CF0 0x2A030018  159 bound 32
+game_task    0x09AF4544 0x27B00020  160 set W1
+game_task    0x09AF45E0 0x005D1021  161 rebase sp W1-0x20
+game_task    0x09B388B4 0x27B20030  162 set W1
+game_task    0x09B3894C 0x005D1021  163 rebase sp W1-0x30
+game_task    0x09B61C14 0x00008021  164 cap_base s4
+game_task    0x09B61C6C 0x30630010  165 cap_check s4 0x60
+arcade_task  0x09A6706C 0x00621021  166 rebase gamesys C-0x43C8
+arcade_task  0x09A677B0 0x00821021  167 rebase gamesys C-0x43C8
+arcade_task  0x09A67A34 0x00621021  168 rebase gamesys C-0x43C8
+arcade_task  0x09A68AC0 0x00821021  169 rebase gamesys C-0x43C8
+arcade_task  0x09A68D48 0x00831821  170 rebase gamesys C-0x43C8
+arcade_task  0x09A6BF24 0x02202021  171 set B
+arcade_task  0x09A6C4E4 0x02002821  172 set B
+arcade_task  0x09A6BF2C 0x26053F28  173 set C
+arcade_task  0x09A6C4DC 0x26243F28  174 set C
+arcade_task  0x09A6BF20 0x24060060  175 set 0x80
+arcade_task  0x09A6C4D8 0x24060060  176 set 0x80
+arcade_task  0x09A6C3B4 0x01402821  177 set C-0x3F28
+arcade_task  0x09A6C414 0x01402021  178 set C-0x3F28
+arcade_task  0x09A6C3FC 0x28C30018  179 bound 32
+arcade_task  0x09A67040 0x24070018  180 set 32
+arcade_task  0x09A67664 0x24070018  181 set 32
+arcade_task  0x09A68A34 0x24070018  182 set 32
+em20         0x09D25654 0x27B20030  183 set W1
+em20         0x09D256D8 0x005D1021  184 rebase sp W1-0x30
+em20         0x09D25778 0x005D1021  185 rebase sp W1-0x30
+em20         0x09D256C0 0x2AA20018  186 bound 32
+em20         0x09D2574C 0x2A030018  187 bound 32
+em59         0x09D1E23C 0x27B10080  188 set W2
+em59         0x09D1E240 0x27B00020  189 set W1
+em59         0x09D1E314 0x005D1021  190 rebase sp W2-0x80
+em59         0x09D1E34C 0x005D1021  191 rebase sp W1-0x20
+em59         0x09D1E2E8 0x2A830018  192 bound 32

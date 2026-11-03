@@ -2,6 +2,7 @@
 // around a stand-in for the game's check. No game data.
 #include "game/give_rarity.hpp"
 
+#include "game/pouch_slots.hpp"
 #include "psprecomp/runtime.hpp"
 #include "settings/settings.hpp"
 
@@ -90,6 +91,25 @@ void test_rarity_address() {
     check(!rarity_address(memory, 0x7FFFFFF0u), "a hunter outside memory has no record");
 }
 
+// With the fourth pouch page the slots are the host's block and 32 is the
+// game's 25th word.
+void test_rarity_fourth_page() {
+    namespace slots = mhfu::game::pouch_slots;
+    psprecomp::GuestMemory memory(32u * 1024u * 1024u);
+    memory.store32(kGameSysPointer, kGameSys);
+    slots::fourth_page() = true;
+    memory.store8(kHunter + kSelectedSlot, 28u);
+    memory.store16(slots::kBlock + 28u * 4u, 220u);
+    check(rarity_address(memory, kHunter) == rarity_of(220u), "a fourth page slot's item record");
+    memory.store8(kHunter + kSelectedSlot, 32u);
+    memory.store16(kGameSys + slots::kGameExtra, 14u);
+    check(rarity_address(memory, kHunter) == rarity_of(14u), "slot 32 is the game's 25th word");
+    memory.store8(kHunter + kSelectedSlot, 33u);
+    memory.store16(slots::kBlock, 12u);
+    check(rarity_address(memory, kHunter) == rarity_of(12u), "past slot 32 reads slot 0, as the game does");
+    slots::fourth_page() = false;
+}
+
 void test_code_check() {
     psprecomp::GuestMemory memory(32u * 1024u * 1024u);
     check(!code_matches(memory), "empty memory is not the executable");
@@ -151,6 +171,7 @@ int main() {
     set_environment("MHFU_TRACE_GIVE", "");
     check(!mhfu::settings::current().give_any_rarity, "giving at any rarity is off by default");
     test_rarity_address();
+    test_rarity_fourth_page();
     test_code_check();
     test_other_code();
     test_wrapper();

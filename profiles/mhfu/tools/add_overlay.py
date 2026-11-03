@@ -119,8 +119,11 @@ def main(argv):
     os.remove(code_path)
     dispatch = dispatched_calls(base, name)
     dispatch_options = [option for address in dispatch for option in ("--dispatch", f"0x{address:08X}")]
+    # The host's site hooks for this overlay, by its name (config/site_hooks.txt).
+    site_hooks = os.path.join(PROFILE_DIR, "config", "site_hooks.txt")
     subprocess.run([recompiler, elf_path, "--auto", target,
-                    code_base_text, "--prefix", prefix, *dispatch_options], cwd=build_dir, check=True)
+                    code_base_text, "--prefix", prefix, *dispatch_options,
+                    "--site-hooks", site_hooks, "--site-image", name], cwd=build_dir, check=True)
     # The metadata the host identifies the corpus by. CMake reads it to configure
     # the library entry point. The build does not need an explicit reconfigure:
     # the CONFIGURE_DEPENDS glob over overlays/*/meta.txt notices the new

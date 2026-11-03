@@ -3,6 +3,7 @@
 #include "game/damage_numbers.hpp"
 #include "game/guest_layout.hpp"
 #include "game/hooks.hpp"
+#include "game/pouch_slots.hpp"
 #include "settings/settings.hpp"
 
 #include <algorithm>
@@ -57,7 +58,6 @@ constexpr std::uint32_t kSquareButton = 0x8000u; // □, X: mining and a bug net
 constexpr std::uint32_t kLeadButton = 0x0100u;   // L: with ○ or □, the item bar
 // The pouch (game/empty_item_slot.hpp).
 constexpr std::uint32_t kPouch = 0x6AEA6u;
-constexpr std::uint16_t kPouchSlots = 24u;
 constexpr std::uint32_t kSelectedSlot = 1608u; // hunter halfword
 constexpr std::uint32_t kHunterPlayer = 486u;  // hunter byte: the local one has GameSys +40
 constexpr std::uint32_t kLocalPlayer = 40u;
@@ -865,12 +865,20 @@ bool GatherRepeat::apply(HunterButtons &buttons, bool ready, std::uint32_t butto
 namespace {
 
 // The pouch's first slot, or nothing when GameSys does not reach past it (the
-// empty stop, slot 24, is the word just after the 24 slots).
-std::optional<std::uint32_t> pouch_slots(const psprecomp::GuestMemory &memory) {
+// empty stop, slot 24, is the word just after the 24 slots). With the fourth
+// pouch page its 32 slots follow it in the host's block (game/pouch_slots.hpp).
+std::optional<std::uint32_t> pouch_first(const psprecomp::GuestMemory &memory) {
     if (!in_ram(kGameSysPointer, 4u, memory)) return std::nullopt;
     const std::uint32_t sys = memory.load32(kGameSysPointer);
-    if (!in_ram(sys, kPouch + (kPouchSlots + 1u) * 4u, memory)) return std::nullopt;
-    return sys + kPouch;
+    if (!in_ram(sys, kPouch + (pouch_slots::kGameSlots + 1u) * 4u, memory)) return std::nullopt;
+    const std::uint32_t first = pouch_slots::first(sys);
+    if (!in_ram(first, pouch_slots::count() * 4u, memory)) return std::nullopt;
+    return first;
+}
+
+// The slots of the pouch: 24, or 32 with the fourth page.
+std::uint16_t slot_count() {
+    return static_cast<std::uint16_t>(pouch_slots::count());
 }
 
 // The hunter the camera follows when it is this console's, whose selection
@@ -891,24 +899,24 @@ bool is_tool(std::uint16_t kind, std::uint16_t item) {
 }
 
 bool holds_tool(const psprecomp::GuestMemory &memory, std::uint32_t pouch, std::uint16_t slot, std::uint16_t kind) {
-    return slot < kPouchSlots && is_tool(kind, memory.load16(pouch + slot * 4u)) &&
+    return slot < slot_count() && is_tool(kind, memory.load16(pouch + slot * 4u)) &&
         memory.load16(pouch + slot * 4u + 2u) > 0u;
 }
 
 } // namespace
 
 std::uint16_t gather_tool_count(const psprecomp::GuestMemory &memory, std::uint16_t item) {
-    const std::optional<std::uint32_t> pouch = pouch_slots(memory);
+    const std::optional<std::uint32_t> pouch = pouch_first(memory);
     if (!pouch || item == 0u) return 0u;
     std::uint32_t total = 0u;
-    for (std::uint16_t slot = 0; slot < kPouchSlots; ++slot)
+    for (std::uint16_t slot = 0; slot < slot_count(); ++slot)
         if (memory.load16(*pouch + slot * 4u) == item) total += memory.load16(*pouch + slot * 4u + 2u);
     return static_cast<std::uint16_t>(std::min<std::uint32_t>(total, 0xFFFFu));
 }
 
 std::optional<std::uint16_t> gather_tool_item(const psprecomp::GuestMemory &memory, std::uint16_t kind) {
     const std::optional<std::uint16_t> slot = gather_tool_slot(memory, kind);
-    const std::optional<std::uint32_t> pouch = pouch_slots(memory);
+    const std::optional<std::uint32_t> pouch = pouch_first(memory);
     if (!slot || !pouch) return std::nullopt;
     return memory.load16(*pouch + *slot * 4u);
 }
@@ -916,18 +924,18 @@ std::optional<std::uint16_t> gather_tool_item(const psprecomp::GuestMemory &memo
 std::optional<std::uint16_t> gather_tool_slot(const psprecomp::GuestMemory &memory, std::uint16_t kind) {
     if (kind != 3u && kind != 4u) return std::nullopt;
     const std::optional<std::uint32_t> hunter = local_hunter(memory);
-    const std::optional<std::uint32_t> pouch = pouch_slots(memory);
+    const std::optional<std::uint32_t> pouch = pouch_first(memory);
     if (!hunter || !pouch) return std::nullopt;
     const std::uint16_t selected = memory.load16(*hunter + kSelectedSlot);
     if (holds_tool(memory, *pouch, selected, kind)) return selected;
-    for (std::uint16_t slot = 0; slot < kPouchSlots; ++slot)
+    for (std::uint16_t slot = 0; slot < slot_count(); ++slot)
         if (holds_tool(memory, *pouch, slot, kind)) return slot;
     return std::nullopt;
 }
 
 bool gather_tool_selected(const psprecomp::GuestMemory &memory, std::uint16_t kind) {
     const std::optional<std::uint32_t> hunter = local_hunter(memory);
-    const std::optional<std::uint32_t> pouch = pouch_slots(memory);
+    const std::optional<std::uint32_t> pouch = pouch_first(memory);
     return hunter && pouch && holds_tool(memory, *pouch, memory.load16(*hunter + kSelectedSlot), kind);
 }
 
