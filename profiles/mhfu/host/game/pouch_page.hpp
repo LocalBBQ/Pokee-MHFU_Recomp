@@ -1,7 +1,8 @@
 #pragma once
 
 // Fourth pouch page: a hunter who owns it carries 32 items instead of 24, in
-// a fourth page of eight. `MHFU_POUCH_PAGE=0` turns it off;
+// a fourth page of eight. The stores sell it as Backpack Lg. once the hunter
+// is High Rank (game/backpack.hpp). `MHFU_POUCH_PAGE=0` turns it off;
 // `MHFU_POUCH_PAGE_GRANT=1` gives it to every hunter, for testing.
 // `MHFU_TRACE_POUCH_PAGE=1` prints each site the first time it runs.
 //
@@ -209,6 +210,10 @@ void game_loaded();
 
 // The hunter in memory has the page and the hooks are on.
 [[nodiscard]] bool active();
+// The hunter in memory owns the page (bought it, or MHFU_POUCH_PAGE_GRANT).
+[[nodiscard]] bool owned();
+// MHFU_POUCH_PAGE is not 0. Read at the first frame.
+[[nodiscard]] bool enabled();
 // Gives the hunter in memory the page, kept when the game next saves.
 void grant(psprecomp::Runtime &runtime);
 
