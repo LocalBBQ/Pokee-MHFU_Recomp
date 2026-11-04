@@ -145,30 +145,42 @@ void test_stock() {
 
 void test_purchase() {
     BufferRam ram(0x08800000u, 0x01400000u);
-    const std::uint32_t pouch = kSys + 0x6AEA6u;
-    const std::uint32_t saved = kSys + kSavedPouch;
+    const Places places{kSys + kBox, kSys + 0x6AEA6u, kSys + kSavedPouch, 24u};
     ram.store16(kSys + kBox + 10u * 4u, kItem);
-    ram.store16(kSys + kBox + 10u * 4u + 2u, 2u);
-    ram.store16(pouch + 3u * 4u, kItem);
-    ram.store16(pouch + 3u * 4u + 2u, 1u);
-    ram.store16(saved + 3u * 4u, kItem);
-    ram.store16(saved + 3u * 4u + 2u, 1u);
-    ram.store16(pouch + 4u * 4u, 7u);
-    ram.store16(pouch + 4u * 4u + 2u, 5u);
+    ram.store16(kSys + kBox + 10u * 4u + 2u, 99u);
+    ram.store16(kSys + kBox + 11u * 4u, kItem);
+    ram.store16(kSys + kBox + 11u * 4u + 2u, 2u);
+    ram.store16(places.pouch + 3u * 4u, kItem);
+    ram.store16(places.pouch + 3u * 4u + 2u, 1u);
+    ram.store16(places.saved + 3u * 4u, kItem);
+    ram.store16(places.saved + 3u * 4u + 2u, 1u);
+    ram.store16(places.pouch + 4u * 4u, 7u);
+    ram.store16(places.pouch + 4u * 4u + 2u, 5u);
+    check(held(ram, places) == 102u, "the box and the pouch count, the saved copy does not count twice");
+    take(ram, places, 2u);
+    check(ram.load32(places.pouch + 3u * 4u) == 0u && ram.load32(places.saved + 3u * 4u) == 0u,
+        "taking starts with the pouch and its copy");
+    check(ram.load16(kSys + kBox + 10u * 4u + 2u) == 98u && ram.load16(kSys + kBox + 11u * 4u + 2u) == 2u,
+        "and takes the rest from the box, a stack at a time");
+    check(
+        ram.load16(places.pouch + 4u * 4u) == 7u && ram.load16(places.pouch + 4u * 4u + 2u) == 5u, "other items stay");
+    take(ram, places, 100u);
+    check(held(ram, places) == 0u, "taking stops when there is none left");
     ram.store32(kSys + kZenny, 1000u);
-    const Taken taken = take_items(ram, kSys, pouch, saved, 24u);
-    check(taken.box == 2u && taken.pouch == 1u && taken.saved == 1u, "every one of the item is counted");
-    check(ram.load32(kSys + kBox + 10u * 4u) == 0u && ram.load32(pouch + 3u * 4u) == 0u &&
-            ram.load32(saved + 3u * 4u) == 0u,
-        "and taken out");
-    check(ram.load16(pouch + 4u * 4u) == 7u && ram.load16(pouch + 4u * 4u + 2u) == 5u, "other items stay");
-    refund(ram, kSys, taken);
-    check(ram.load32(kSys + kZenny) == 1000u + 2u * kPrice, "the two bought past the first are paid back");
-    refund(ram, kSys, Taken{0u, 1u, 1u});
-    check(ram.load32(kSys + kZenny) == 1000u + 2u * kPrice, "one bought is not paid back");
+    refund(ram, kSys, 2u);
+    check(ram.load32(kSys + kZenny) == 1000u + 2u * kPrice, "extra items are paid back");
+    refund(ram, kSys, 0u);
+    check(ram.load32(kSys + kZenny) == 1000u + 2u * kPrice, "none extra, nothing back");
     ram.store32(kSys + kZenny, kMostZenny - 5u);
-    refund(ram, kSys, Taken{3u, 0u, 0u});
+    refund(ram, kSys, 3u);
     check(ram.load32(kSys + kZenny) == kMostZenny, "a refund stops at the most zenny");
+}
+
+int stand_in_calls = 0;
+void stand_in(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
+    ++stand_in_calls;
+    ctx.gpr[2] = 7u;
+    ctx.pc = ctx.gpr[31];
 }
 
 void set_hunter(psprecomp::GuestMemory &memory, const std::u16string &name) {
@@ -186,7 +198,10 @@ void test_frame() {
     set_hunter(memory, u"Cid");
     write_quests(memory, {10501u, 10509u});
     write_stock(memory);
-    // lobby_task in the task slot.
+    // A save that holds the unused id already: never taken for a purchase.
+    memory.store16(kSys + kBox + 5u * 4u, kItem);
+    memory.store16(kSys + kBox + 5u * 4u + 2u, 99u);
+    // lobby_task in the task slot, and stand-ins for the two checks.
     const std::uint32_t slot = mhfu::game::layout::kTaskSlot;
     memory.store32(slot, mhfu::game::layout::kOverlayMagic);
     memory.store32(slot + 8u, slot);
@@ -194,6 +209,8 @@ void test_frame() {
     for (std::size_t i = 0; i <= name.size(); ++i)
         memory.store8(
             slot + 32u + static_cast<std::uint32_t>(i), i < name.size() ? static_cast<std::uint8_t>(name[i]) : 0u);
+    runtime.register_function(kGuideCheck, &stand_in, "guide_stand_in");
+    runtime.register_function(kObtainedCheck, &stand_in, "obtained_stand_in");
     // Its text: table 0 with lines 491, 492 and 495.
     constexpr std::uint32_t kList = 0x08A00000u, kBlock = 0x08A80000u;
     memory.store32(kResourcesPointer, kList);
@@ -204,12 +221,20 @@ void test_frame() {
     for (std::uint32_t line : {kBuyLine, kBuyFullLine, kBuyToBoxLine}) memory.store32(table + line * 4u, 0x4000u);
     // The item text table, so the name can be pointed.
     memory.store32(kTextBlock + 3u * 4u, 0x40u);
+    const auto call = [&](std::uint32_t address, std::uint32_t item, std::uint32_t ra) {
+        psprecomp::AllegrexContext ctx{};
+        ctx.gpr[5] = item;
+        ctx.gpr[31] = ra;
+        runtime.function_at(address)(runtime, ctx);
+        return ctx.gpr[2];
+    };
 
     mhfu::game::pouch_page::frame(runtime);
     frame(runtime);
     check(memory.load32(kItemTable + kItem * kItemRecord + kBuyPrice) == kPrice, "the frame writes the item's record");
     check(memory.load32(kVillageStock) == kVillageLists[0] && memory.load32(table + kBuyLine * 4u) == 0x4000u,
         "below High Rank nothing is offered");
+    check(memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u, "the items the save held stay");
 
     memory.store8(kSys + kHunterRank, 3u);
     frame(runtime);
@@ -218,15 +243,27 @@ void test_frame() {
             memory.load32(table + kBuyToBoxLine * 4u) == kBuyToBoxText - table,
         "and the shopkeeper says it just came in");
     check(memory.load32(table + kBuyFullLine * 4u) == 0x4000u, "without the page the full pouch says 24");
+    check(memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u, "what the save held is still not a purchase");
+    stand_in_calls = 0;
+    check(
+        call(kGuideCheck, kItem, kListGuideReturn) == 1u && stand_in_calls == 0, "the list takes the item for a Guide");
+    check(call(kGuideCheck, kItem, 0x09A7FEF4u) == 7u && call(kGuideCheck, 829u, kListGuideReturn) == 7u &&
+            stand_in_calls == 2,
+        "the purchase and the real Guides get the game's answer");
+    check(call(kObtainedCheck, kItem, 0u) == 0u && call(kObtainedCheck, 12u, 0u) == 7u,
+        "not owned, the item is not obtained; other items are the game's");
 
     memory.store16(kSys + 0x6AEA6u + 2u * 4u, kItem);
     memory.store16(kSys + 0x6AEA6u + 2u * 4u + 2u, 1u);
     frame(runtime);
     check(mhfu::game::pouch_page::owned() && mhfu::game::pouch_page::active(), "bought, the page is the hunter's");
-    check(memory.load32(mhfu::game::pouch_page::kPouch + 2u * 4u) == 0u, "and the item is gone");
+    check(memory.load32(mhfu::game::pouch_page::kPouch + 2u * 4u) == 0u &&
+            memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u,
+        "the bought item is gone, the save's own stay");
     frame(runtime);
-    check(memory.load32(kVillageStock) == kVillageLists[0] && memory.load32(table + kBuyLine * 4u) == 0x4000u,
-        "owned, the store sells it no more and says what it said");
+    check(memory.load32(kVillageStock) != kVillageLists[0], "owned, the store still lists it");
+    check(call(kObtainedCheck, kItem, 0u) == 1u, "obtained, so the list greys it out");
+    check(memory.load32(table + kBuyLine * 4u) == 0x4000u, "and the shopkeeper says what she said");
     check(memory.load32(table + kBuyFullLine * 4u) == kBuyFullText - table, "and the full pouch says 32");
 }
 
