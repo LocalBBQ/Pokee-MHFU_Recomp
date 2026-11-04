@@ -286,6 +286,7 @@ set(MHFU_HOST_SOURCES
     host/game/guest_calls.cpp
     host/game/item_sets.cpp
     host/game/item_sets_menu.cpp
+    host/game/backpack.cpp
     host/game/pouch_page.cpp
     host/game/sharpness_gauge.cpp
     third_party/tiny_aes/aes.c
@@ -655,6 +656,8 @@ endif()
 # frame, save and load on a runtime. No game data.
 add_executable(mhfu_pouch_page_tests
     tests/pouch_page_tests.cpp
+    tests/backpack_tests.cpp
+    host/game/backpack.cpp
     host/game/pouch_page.cpp
     host/game/game_data.cpp
     host/game/guest_calls.cpp

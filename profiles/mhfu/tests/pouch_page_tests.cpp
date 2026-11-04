@@ -394,6 +394,9 @@ void test_runtime(const std::filesystem::path &dir) {
 
 } // namespace
 
+// backpack_tests.cpp
+void backpack_tests(int &failures);
+
 int main() {
     const std::filesystem::path data = std::filesystem::temp_directory_path() / "pokee_pouch_page_tests";
     std::error_code stale;
@@ -410,6 +413,7 @@ int main() {
     test_blocks();
     test_store(data);
     test_runtime(data);
+    backpack_tests(failures);
     std::filesystem::remove_all(data, stale);
     if (failures != 0) {
         std::cerr << failures << " pouch page check(s) failed\n";

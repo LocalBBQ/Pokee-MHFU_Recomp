@@ -8,6 +8,7 @@
 #include "kernel/load_trace.hpp"
 
 #include "overlays.hpp"
+#include "game/backpack.hpp"
 #include "game/body_trace.hpp"
 #include "adhoc/client.hpp"
 #include "game/damage_numbers.hpp"
@@ -371,6 +372,7 @@ void present_frame(Runtime &rt) {
     game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
     game::item_sets::frame(rt);
     game::pouch_page::frame(rt);
+    game::backpack::frame(rt);
     game::hall_meal::frame(rt, &call_guest_with_result);
     game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
     game::sharpness::gauge_frame(settings::current().sharpness_gauge, &rt.memory());
