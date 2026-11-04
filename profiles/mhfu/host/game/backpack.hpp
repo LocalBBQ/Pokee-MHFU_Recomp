@@ -5,7 +5,8 @@
 // (the Village Chief's 7★ quests), the village General Store and the Guild
 // Hall's store sell it for 100,000z, and the shopkeeper's line says that it
 // just came in. Bought, it is taken back out of the pouch or the box and the
-// hunter owns the page, kept when the game next saves. Off with the page
+// hunter owns the page, kept when the game next saves; the stores then show
+// it greyed out, as the Guides they sell. Off with the page
 // (MHFU_POUCH_PAGE=0).
 //
 // Read off the USA executable (ULUS-10391) and lobby_task, and checked on a
@@ -42,9 +43,17 @@
 //   the store says when buying into the pouch and 495 into the box; while the
 //   item is offered they say it just came in. 492, the pouch being full,
 //   says 32 kinds of item with the fourth page.
-// - Zenny is the u32 at GameSys + 0x696F0; the box is 1000 slots at GameSys +
-//   0x3428. Bought into the box more than once, the extra items are paid
-//   back.
+// - The store treats the Organizer and Backpacker Guides (829, 830) apart:
+//   0x09A80230 tells them, and the list greys one once it is obtained
+//   (0x0885C5CC, the bits at GameSys + 0x4A0 + 0x6A7B4). The list's call of
+//   it (from 0x09A7F24C, another unit) is answered yes for the item, and the
+//   item counts as obtained once the hunter owns the page, so it is greyed
+//   out as they are. The purchase calls 0x09A80230 inside its own unit, so it
+//   adds the item as any other: the item is never taken away for being held
+//   (a save may hold the unused id already), only when more of it comes while
+//   it is offered. Zenny is the u32 at GameSys + 0x696F0; the box is 1000
+//   slots at GameSys + 0x3428. Bought more than once, the extra items are
+//   paid back.
 
 #include "game/guest_ram.hpp"
 
@@ -76,6 +85,10 @@ inline constexpr std::uint32_t kZenny = 0x696F0u;
 inline constexpr std::uint32_t kBox = 0x3428u;
 inline constexpr std::uint32_t kBoxSlots = 1000u;
 inline constexpr std::uint32_t kSavedPouch = 0x43C8u;
+// The store's Guide check, where the list calls it, and the obtained check.
+inline constexpr std::uint32_t kGuideCheck = 0x09A80230u;
+inline constexpr std::uint32_t kListGuideReturn = 0x09A7F254u;
+inline constexpr std::uint32_t kObtainedCheck = 0x0885C5CCu;
 
 // The Chief's 6★ Urgent Quests, and the Urgent Quests after them.
 inline constexpr std::array<std::uint16_t, 2> kSixStarUrgents{10501u, 10509u};
@@ -169,17 +182,21 @@ std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free);
 
 // The purchase -----------------------------------------------------------------
 
-// How many of the item the box, the pouch and the pouch as saved hold, and
-// takes them out of all three. `pouch` and `saved` are the first slots of the
-// pouch and of the saved pouch, `slots` how many each has.
-struct Taken {
+// Where the item can be: the box, the pouch and the pouch as saved, a copy
+// of the pouch (`slots` slots each).
+struct Places {
     std::uint32_t box{};
     std::uint32_t pouch{};
     std::uint32_t saved{};
+    std::uint32_t slots{};
 };
-Taken take_items(Ram &ram, std::uint32_t game_sys, std::uint32_t pouch, std::uint32_t saved, std::uint32_t slots);
-// The zenny back for every item bought past the first.
-void refund(Ram &ram, std::uint32_t game_sys, const Taken &taken);
+// How many of the item the hunter has.
+[[nodiscard]] std::uint32_t held(const Ram &ram, const Places &places);
+// Takes `count` of the item out: from the pouch and its copy first, then the
+// box.
+void take(Ram &ram, const Places &places, std::uint32_t count);
+// The zenny back for `extra` items.
+void refund(Ram &ram, std::uint32_t game_sys, std::uint32_t extra);
 
 // At the flip, after the pouch page's.
 void frame(psprecomp::Runtime &runtime);

@@ -1,6 +1,7 @@
 #include "game/backpack.hpp"
 
 #include "game/guest_layout.hpp"
+#include "game/hooks.hpp"
 #include "game/item_sets.hpp"
 #include "game/pouch_page.hpp"
 #include "game/pouch_slots.hpp"
@@ -180,28 +181,44 @@ std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free) {
     return free;
 }
 
-Taken take_items(Ram &ram, std::uint32_t game_sys, std::uint32_t pouch, std::uint32_t saved, std::uint32_t slots) {
-    Taken taken;
-    const auto take = [&](std::uint32_t first, std::uint32_t count, std::uint32_t &total) {
-        if (first == 0u || !ram.contains(first, count * 4u)) return;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            const std::uint32_t at = first + i * 4u;
-            if (ram.load16(at) != kItem) continue;
-            total += ram.load16(at + 2u);
-            ram.store32(at, slot_word(0u, 0u));
-        }
+std::uint32_t held(const Ram &ram, const Places &places) {
+    const auto count = [&](std::uint32_t first, std::uint32_t slots) {
+        std::uint32_t total = 0u;
+        if (first == 0u || !ram.contains(first, slots * 4u)) return total;
+        for (std::uint32_t i = 0; i < slots; ++i)
+            if (ram.load16(first + i * 4u) == kItem) total += ram.load16(first + i * 4u + 2u);
+        return total;
     };
-    take(game_sys + kBox, kBoxSlots, taken.box);
-    take(pouch, slots, taken.pouch);
-    take(saved, slots, taken.saved);
-    return taken;
+    return count(places.box, kBoxSlots) + std::max(count(places.pouch, places.slots), count(places.saved, places.slots));
 }
 
-void refund(Ram &ram, std::uint32_t game_sys, const Taken &taken) {
-    // The pouch and the saved pouch are copies of each other.
-    const std::uint32_t bought = taken.box + std::max(taken.pouch, taken.saved);
-    if (bought <= 1u || !ram.contains(game_sys + kZenny, 4u)) return;
-    const std::uint64_t zenny = ram.load32(game_sys + kZenny) + std::uint64_t{bought - 1u} * kPrice;
+void take(Ram &ram, const Places &places, std::uint32_t count) {
+    // Up to `wanted` from the slots from `first`; how many were there.
+    const auto take_from = [&](std::uint32_t first, std::uint32_t slots, std::uint32_t wanted) {
+        std::uint32_t taken = 0u;
+        if (first == 0u || !ram.contains(first, slots * 4u)) return taken;
+        for (std::uint32_t i = 0; i < slots && taken < wanted; ++i) {
+            const std::uint32_t at = first + i * 4u;
+            if (ram.load16(at) != kItem) continue;
+            const std::uint16_t here = ram.load16(at + 2u);
+            const std::uint16_t out = static_cast<std::uint16_t>(std::min<std::uint32_t>(here, wanted - taken));
+            taken += out;
+            if (out == here)
+                ram.store32(at, slot_word(0u, 0u));
+            else
+                ram.store16(at + 2u, static_cast<std::uint16_t>(here - out));
+        }
+        return taken;
+    };
+    const std::uint32_t from_pouch = take_from(places.pouch, places.slots, count);
+    const std::uint32_t from_saved = take_from(places.saved, places.slots, count);
+    const std::uint32_t from_either = std::max(from_pouch, from_saved);
+    if (from_either < count) (void)take_from(places.box, kBoxSlots, count - from_either);
+}
+
+void refund(Ram &ram, std::uint32_t game_sys, std::uint32_t extra) {
+    if (extra == 0u || !ram.contains(game_sys + kZenny, 4u)) return;
+    const std::uint64_t zenny = ram.load32(game_sys + kZenny) + std::uint64_t{extra} * kPrice;
     ram.store32(game_sys + kZenny, static_cast<std::uint32_t>(std::min<std::uint64_t>(zenny, kMostZenny)));
 }
 
@@ -214,11 +231,41 @@ struct State {
     std::optional<std::uint32_t> name, description;
     std::uint32_t lobby_block{};
     std::optional<std::uint32_t> buy, buy_to_box, buy_full;
+    // How many of the item the hunter had, to tell a purchase.
+    std::string hunter;
+    std::optional<std::uint32_t> had;
+    psprecomp::Runtime::RecompiledFunction guide_check{};
+    psprecomp::Runtime::RecompiledFunction obtained_check{};
 };
 
 State &state() {
     static State s;
     return s;
+}
+
+void answer(psprecomp::AllegrexContext &ctx, std::uint32_t value) {
+    ctx.gpr[2] = value;
+    ctx.pc = ctx.gpr[31];
+}
+
+// 0x09A80230(store, item): a Guide. The list asks for each item it shows.
+void guide_check(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    if ((ctx.gpr[5] & 0xFFFFu) == kItem && ctx.gpr[31] == kListGuideReturn && pouch_page::enabled()) {
+        answer(ctx, 1u);
+        return;
+    }
+    ctx.pc = kGuideCheck;
+    state().guide_check(runtime, ctx);
+}
+
+// 0x0885C5CC(?, item): obtained. The item is, once the hunter owns the page.
+void obtained_check(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    if ((ctx.gpr[5] & 0xFFFFu) == kItem && pouch_page::enabled()) {
+        answer(ctx, pouch_page::owned() ? 1u : 0u);
+        return;
+    }
+    ctx.pc = kObtainedCheck;
+    state().obtained_check(runtime, ctx);
 }
 
 } // namespace
@@ -244,28 +291,41 @@ void frame(psprecomp::Runtime &runtime) {
     }
     point_entry(ram, kTextBlock, kNameTable, kItem, kNameText, s.name);
     point_entry(ram, kTextBlock, kDescriptionTable, kItem, kDescriptionText, s.description);
+    if (runtime.function_at(kObtainedCheck) != nullptr && runtime.function_at(kObtainedCheck) != &obtained_check)
+        (void)hooks::wrap(runtime, kObtainedCheck, &obtained_check, s.obtained_check, "mhfu_backpack_obtained");
 
     const std::uint32_t sys = item_sets::game_sys(ram);
-    if (sys == 0u || item_sets::hunter_name(ram, sys).empty()) return;
-
-    // Bought: the item goes, the page comes.
-    const std::uint32_t saved = pouch_page::active() ? pouch_page::kSaved : sys + kSavedPouch;
-    const Taken taken =
-        take_items(ram, sys, pouch_slots::first(sys), saved, pouch_slots::count());
-    if (taken.box + taken.pouch + taken.saved > 0u) {
-        refund(ram, sys, taken);
-        pouch_page::grant(runtime);
-        if (s.trace)
-            std::cout << "[pouch page] Backpack Lg. bought (box " << taken.box << ", pouch " << taken.pouch
-                      << "): the fourth page is the hunter's" << std::endl;
+    const std::string hunter = sys != 0u ? item_sets::hunter_name(ram, sys) : std::string{};
+    if (hunter.empty()) return;
+    if (hunter != s.hunter) {
+        s.hunter = hunter;
+        s.had.reset();
     }
+    const bool lobby = layout::overlay_loaded(runtime.memory(), layout::kTaskSlot, "lobby_task.ovl");
+    const bool unlocked = high_rank(ram, sys);
+    const bool offered = lobby && unlocked && !pouch_page::owned();
 
-    if (!layout::overlay_loaded(runtime.memory(), layout::kTaskSlot, "lobby_task.ovl")) return;
-    const bool offered = high_rank(ram, sys) && !pouch_page::owned();
+    // Bought: more of the item than the hunter had, while it is offered.
+    const Places places{sys + kBox, pouch_slots::first(sys), pouch_page::active() ? pouch_page::kSaved : sys + kSavedPouch,
+        pouch_slots::count()};
+    const std::uint32_t now = held(ram, places);
+    if (offered && s.had && now > *s.had) {
+        const std::uint32_t bought = now - *s.had;
+        take(ram, places, bought);
+        refund(ram, sys, bought - 1u);
+        pouch_page::grant(runtime);
+        if (s.trace) std::cout << "[pouch page] Backpack Lg. bought: the fourth page is the hunter's" << std::endl;
+    }
+    s.had = held(ram, places);
+
+    if (!lobby) return;
     if (offered != s.offered && s.trace)
-        std::cout << "[pouch page] Backpack Lg. " << (offered ? "in stock" : "not in stock") << std::endl;
+        std::cout << "[pouch page] Backpack Lg. " << (offered ? "in stock" : "not on offer") << std::endl;
     s.offered = offered;
-    offer_stock(ram, offered, kStockCopies);
+    if (runtime.function_at(kGuideCheck) != nullptr && runtime.function_at(kGuideCheck) != &guide_check)
+        (void)hooks::wrap(runtime, kGuideCheck, &guide_check, s.guide_check, "mhfu_backpack_guide");
+    // Listed from High Rank on, greyed out once bought, as the Guides are.
+    offer_stock(ram, unlocked, kStockCopies);
     const std::uint32_t block = lobby_text_block(ram);
     if (block == 0u) return;
     if (block != s.lobby_block) {
