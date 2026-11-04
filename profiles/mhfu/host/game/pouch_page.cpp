@@ -532,6 +532,14 @@ bool active() {
     return state().active;
 }
 
+bool owned() {
+    return !state().hunter.empty() && state().page.owned;
+}
+
+bool enabled() {
+    return state().started && state().enabled;
+}
+
 void grant(psprecomp::Runtime &runtime) {
     State &s = state();
     if (!s.enabled || s.hunter.empty() || s.active) return;
