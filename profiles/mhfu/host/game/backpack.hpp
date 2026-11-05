@@ -3,9 +3,9 @@
 // Lg Backpack: the item that gives the fourth pouch page (game/pouch_page.hpp).
 // Once the hunter reaches High Rank, in the Guild (HR 4) or in the village
 // (the Village Chief's 7★ quests), the village General Store and the Guild
-// Hall's store sell it for 100,000z, next to the Backpacker Guide, and the
-// shopkeeper's line says that it just came in. The village shopkeeper has
-// news of it, once, as she has of her other new stock. Bought, it is taken
+// Hall's store sell it for 100,000z, next to the Backpacker Guide. The
+// village shopkeeper has news of it, once, as she has of her other new
+// stock. Bought, it is taken
 // back out of the pouch or the box and the hunter owns the page, kept when
 // the game next saves; the store greys it out at once, as the Guides it
 // sells. Off with the page (MHFU_POUCH_PAGE=0).
@@ -43,10 +43,10 @@
 //   Guide alone, the Guild Hall's neither.
 // - The store's line is a text of lobby_task's: table 0 of the text block
 //   that 0x09A7B7D8 finds as resource 4 in the list at *(0x09A0B680) +
-//   0x83C030 (512 entries of 12 bytes: the id, then the block). 491 is what
-//   the store says when buying into the pouch and 495 into the box; while the
-//   item is offered they say it just came in. 492, the pouch being full,
-//   says 32 kinds of item with the fourth page.
+//   0x83C030 (512 entries of 12 bytes: the id, then the block). 492, what
+//   the store says with the pouch full, says 32 kinds of item with the
+//   fourth page. 491 and 495, its prompt to buy into the pouch and into the
+//   box, stay the game's: they show the whole time the list is open.
 // - The store treats the Organizer and Backpacker Guides (829, 830) apart:
 //   0x09A80230 tells them, and the list greys one once it is obtained
 //   (0x0885C5CC, the bits at GameSys + 0x4A0 + 0x6A7B4). The list's call of
@@ -157,9 +157,7 @@ inline constexpr std::uint32_t kResourceBytes = 12u;
 inline constexpr std::uint32_t kMostResources = 0x200u;
 inline constexpr std::uint32_t kLobbyText = 4u;
 inline constexpr int kStoreTable = 0;
-inline constexpr std::uint32_t kBuyLine = 491u;
 inline constexpr std::uint32_t kBuyFullLine = 492u;
-inline constexpr std::uint32_t kBuyToBoxLine = 495u;
 
 // The stock lists, as lobby_task (ULUS-10391) has them.
 inline constexpr std::uint32_t kVillageStock = 0x09B070A8u;
@@ -173,8 +171,6 @@ inline constexpr std::uint32_t kMostStock = 200u;
 // pouch page's blocks.
 inline constexpr std::uint32_t kNameText = 0x08803380u;
 inline constexpr std::uint32_t kDescriptionText = 0x08803390u;
-inline constexpr std::uint32_t kBuyText = 0x08803400u;
-inline constexpr std::uint32_t kBuyToBoxText = 0x08803480u;
 inline constexpr std::uint32_t kBuyFullText = 0x08803500u;
 inline constexpr std::uint32_t kNewsText = 0x08803580u;
 inline constexpr std::uint32_t kStockCopies = 0x08803640u;
@@ -182,11 +178,6 @@ inline constexpr std::uint32_t kWindowEnd = 0x08803F00u;
 
 inline constexpr std::string_view kName = "Lg Backpack";
 inline constexpr std::string_view kDescription = "A large backpack. Adds a\nfourth page to your pouch.";
-inline constexpr std::string_view kBuyLineText =
-    "~C00We have a new item in stock!\n~C05Lg Backpack~C00 will let you\ncarry more items.";
-inline constexpr std::string_view kBuyToBoxLineText =
-    "~C00New in stock: ~C05Lg Backpack~C00,\nto carry more items.\n~C05The item will be automatically\nsent to "
-    "your Item Box.";
 // As wide as the shopkeeper's own lines: 22 characters, at most 7 lines.
 inline constexpr std::string_view kNewsLineText = "Welcome! We have a new\nitem in stock: the Lg\nBackpack! It "
                                                   "will let\nyou carry more items,\nwith a fourth page in\nyour "

@@ -268,7 +268,8 @@ void test_frame() {
     // A store's list to buy from, with the item.
     memory.store32(kStore + kStoreRows, 2u);
     memory.store16(kStore + kStoreRow + kRowBytes + kRowItem, kItem);
-    // Its text: table 0 with lines 491, 492 and 495.
+    // Its text: table 0 with the prompts to buy, 491 and 495, and 492.
+    constexpr std::uint32_t kBuyLine = 491u, kBuyToBoxLine = 495u;
     constexpr std::uint32_t kList = 0x08A00000u, kBlock = 0x08A80000u;
     memory.store32(kResourcesPointer, kList);
     memory.store32(kList + kResources, kLobbyText);
@@ -305,9 +306,8 @@ void test_frame() {
     memory.store8(kSys + kHunterRank, 3u);
     frame(runtime);
     check(memory.load32(kVillageStock) != kVillageLists[0], "at HR 4 the store sells the item");
-    check(memory.load32(table + kBuyLine * 4u) == kBuyText - table &&
-            memory.load32(table + kBuyToBoxLine * 4u) == kBuyToBoxText - table,
-        "and the shopkeeper says it just came in");
+    check(memory.load32(table + kBuyLine * 4u) == 0x4000u && memory.load32(table + kBuyToBoxLine * 4u) == 0x4000u,
+        "while the store's prompts to buy stay its own");
     check(memory.load32(table + kBuyFullLine * 4u) == 0x4000u, "without the page the full pouch says 24");
     check(memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u, "what the save held is still not a purchase");
 
@@ -355,7 +355,7 @@ void test_frame() {
     check(call(kPouchCount, kItem, kPaneCountReturn) == 1u, "and the pane counts one, the most, in red");
     check(call(kPouchCount, kItem, 0x09A84A38u) == 7u && call(kPouchCount, 12u, kPaneCountReturn) == 7u,
         "the pouch's count elsewhere, and of other items, is the game's");
-    check(memory.load32(table + kBuyLine * 4u) == 0x4000u, "and the shopkeeper says what she said");
+    check(memory.load32(table + kBuyLine * 4u) == 0x4000u, "and the store's prompt is still its own");
     check(memory.load32(table + kBuyFullLine * 4u) == kBuyFullText - table, "and the full pouch says 32");
 }
 
