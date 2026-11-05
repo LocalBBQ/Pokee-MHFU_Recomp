@@ -278,6 +278,8 @@ set(MHFU_HOST_SOURCES
     host/game/item_box.cpp
     host/game/empty_item_slot.cpp
     host/game/give_rarity.cpp
+    host/game/throwing_knives.cpp
+    host/game/shop_stock.cpp
     host/game/true_attack.cpp
     host/game/true_element.cpp
     host/game/hall_equipment.cpp
@@ -666,6 +668,7 @@ add_executable(mhfu_pouch_page_tests
     tests/pouch_page_tests.cpp
     tests/backpack_tests.cpp
     host/game/backpack.cpp
+    host/game/shop_stock.cpp
     host/game/pouch_page.cpp
     host/game/game_data.cpp
     host/game/guest_calls.cpp
@@ -732,6 +735,43 @@ target_link_libraries(mhfu_give_rarity_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_give_rarity_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_give_rarity_tests COMMAND mhfu_give_rarity_tests)
+endif()
+
+# Throwing knives: the items, the texts, the stores' lists and the
+# combinations, around stand-ins for the game's functions. No game data.
+add_executable(mhfu_throwing_knives_tests
+    tests/throwing_knives_tests.cpp
+    host/game/throwing_knives.cpp
+    host/game/shop_stock.cpp
+    host/game/guest_ram.cpp
+    host/game/hooks.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_throwing_knives_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_throwing_knives_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_throwing_knives_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_throwing_knives_tests COMMAND mhfu_throwing_knives_tests)
+endif()
+
+# The stores' lists: the code check, the copies and their reuse, both items in
+# one list, and the game's lists back. No game data.
+add_executable(mhfu_shop_stock_tests
+    tests/shop_stock_tests.cpp
+    host/game/shop_stock.cpp
+    host/game/guest_ram.cpp)
+target_include_directories(mhfu_shop_stock_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_shop_stock_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_shop_stock_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_shop_stock_tests COMMAND mhfu_shop_stock_tests)
 endif()
 
 # True attack: the code check and the factor table. No game data.

@@ -1932,6 +1932,14 @@ void Menu::mods() {
             s.key_quests = !s.key_quests;
             settings::save();
         }
+        if (toggle_row("Throwing Knives", s.throwing_knives,
+                options_for("game.throwing_knives",
+                    "On (default): throwing knives are items you keep, not supply items. The Throwing Knife is "
+                    "sold in the shops for 750z, and Whetstone + Machalite Ore or Dragonite Ore combines into "
+                    "one; the coated knives are combined from it. Off: supply items, as in the game."))) {
+            s.throwing_knives = !s.throwing_knives;
+            settings::save();
+        }
     }
     mods_page(back_);
     if (take_mods_restart_request()) {

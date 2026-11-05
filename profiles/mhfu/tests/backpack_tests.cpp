@@ -6,8 +6,11 @@
 
 #include "game/guest_layout.hpp"
 #include "game/pouch_page.hpp"
+#include "game/shop_stock.hpp"
 #include "psprecomp/runtime.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -16,6 +19,14 @@
 namespace {
 using namespace mhfu::game::backpack;
 using mhfu::game::BufferRam;
+namespace shop_stock = mhfu::game::shop_stock;
+
+// The stores' tables and lists, as lobby_task (ULUS-10391) has them.
+constexpr std::uint32_t kVillageStock = shop_stock::kVillageTable;
+constexpr std::uint32_t kHallStock = shop_stock::kHallTable;
+constexpr std::array<std::uint32_t, 8> kVillageLists{
+    0x09B06510u, 0x09B06580u, 0x09B065F8u, 0x09B06678u, 0x09B06710u, 0x09B067B0u, 0x09B06858u, 0x09B06900u};
+constexpr std::array<std::uint32_t, 5> kHallLists{0x09B069B0u, 0x09B06A20u, 0x09B06A60u, 0x09B06AA0u, 0x09B06AD8u};
 
 int *failures_ = nullptr;
 
@@ -120,6 +131,7 @@ template <typename Memory> void write_stock(Memory &ram) {
     };
     put(kVillageStock, kVillageLists);
     put(kHallStock, kHallLists);
+    for (const shop_stock::CodeWord &word : shop_stock::kSignature) ram.store32(word.address, word.word);
 }
 
 void test_stock() {
@@ -130,29 +142,22 @@ void test_stock() {
         "or after the Organizer Guide, in a list without the Backpacker Guide");
     check(with_item({5u, 6u}) == Ids{5u, 6u, kItem} && with_item({}) == Ids{kItem}, "or last, in a list of neither");
 
-    BufferRam ram(0x08800000u, 0x01400000u);
-    write_stock(ram);
-    ram.store16(kVillageLists[7] + 2u, kTemplateItem);
-    const std::uint32_t end = offer_stock(ram, true, kStockCopies);
-    check(end > kStockCopies && end <= kWindowEnd, "the copies fit the window");
-    check(kNewsText + kNewsLineText.size() < kStockCopies && kBuyFullText + kBuyFullLineText.size() < kNewsText,
-        "the texts fit before the copies");
-    const std::uint32_t village = ram.load32(kVillageStock + 2u * 4u);
-    check(village != kVillageLists[2] && read_ids(ram, village) == Ids{9u, 11u, kItem},
-        "offered, the village store's list has the item");
-    check(read_ids(ram, ram.load32(kVillageStock + 7u * 4u)) == Ids{14u, kTemplateItem, kItem},
-        "next to the Backpacker Guide where it sells one");
-    check(read_ids(ram, ram.load32(kHallStock + 4u * 4u)) == Ids{11u, 11u, kItem}, "and so has the Guild Hall's");
-    check(offer_stock(ram, true, kStockCopies) == end && ram.load32(kVillageStock + 2u * 4u) == village,
-        "offering again keeps the same copies");
-    offer_stock(ram, false, kStockCopies);
-    check(ram.load32(kVillageStock + 2u * 4u) == kVillageLists[2] && ram.load32(kHallStock) == kHallLists[0],
-        "not offered, the game's lists are back");
-    ram.store32(kHallStock, 0x09B0FFF0u); // another overlay's data
-    offer_stock(ram, true, kStockCopies);
-    check(ram.load32(kHallStock) == 0x09B0FFF0u && ram.load32(kHallStock + 4u) == kHallLists[1],
-        "a table that is not the game's is left alone");
-    check(ram.load32(kVillageStock) != kVillageLists[0], "while the other table still gets the item");
+    check(stock(kVillageStock, {5u, 6u}) == Ids{5u, 6u}, "before High Rank the stores' lists stay");
+    check(kNewsText + kNewsLineText.size() < kTextsEnd && kBuyFullText + kBuyFullLineText.size() < kNewsText,
+        "the texts fit their window");
+}
+
+// The stores' lists after a frame: the backpack's and, as present_frame runs
+// them together, the Throwing Knife's after the Boomerang.
+std::vector<std::uint16_t> knife(std::uint32_t, std::vector<std::uint16_t> ids) {
+    if (const auto at = std::find(ids.begin(), ids.end(), std::uint16_t{57u}); at != ids.end()) ids.insert(at + 1, 58u);
+    return ids;
+}
+
+void keep_stock(psprecomp::GuestMemory &memory) {
+    mhfu::game::GuestRam ram(memory);
+    constexpr std::array<shop_stock::Stocking, 2> kStockings{&knife, &stock};
+    (void)shop_stock::keep(ram, kStockings);
 }
 
 void test_purchase() {
@@ -297,6 +302,7 @@ void test_frame() {
 
     mhfu::game::pouch_page::frame(runtime);
     frame(runtime);
+    keep_stock(memory);
     check(memory.load32(kItemTable + kItem * kItemRecord + kBuyPrice) == kPrice, "the frame writes the item's record");
     check(memory.load32(kVillageStock) == kVillageLists[0] && memory.load32(table + kBuyLine * 4u) == 0x4000u,
         "below High Rank nothing is offered");
@@ -304,8 +310,19 @@ void test_frame() {
     check(line(kGreeting, 1) == 7u, "below High Rank the shopkeeper greets as she does");
 
     memory.store8(kSys + kHunterRank, 3u);
+    memory.store16(kVillageLists[1] + 2u, 57u); // the Boomerang, for the knife
     frame(runtime);
+    keep_stock(memory);
     check(memory.load32(kVillageStock) != kVillageLists[0], "at HR 4 the store sells the item");
+    {
+        using Ids = std::vector<std::uint16_t>;
+        const mhfu::game::GuestRam ram(memory);
+        check(read_ids(ram, memory.load32(kVillageStock)) == Ids{7u, 11u, kItem}, "last in a list without the Guides");
+        check(read_ids(ram, memory.load32(kVillageStock + 4u)) == Ids{8u, 57u, 58u, kItem},
+            "beside the Throwing Knife in a list with the Boomerang");
+        check(read_ids(ram, memory.load32(kHallStock + 4u * 4u)) == Ids{11u, 11u, kItem}, "and in the Guild Hall's");
+        check(read_ids(ram, kVillageLists[1]) == Ids{8u, 57u}, "the game's lists are left as they are");
+    }
     check(memory.load32(table + kBuyLine * 4u) == 0x4000u && memory.load32(table + kBuyToBoxLine * 4u) == 0x4000u,
         "while the store's prompts to buy stay its own");
     check(memory.load32(table + kBuyFullLine * 4u) == 0x4000u, "without the page the full pouch says 24");
@@ -324,6 +341,7 @@ void test_frame() {
         "a talk that begins with the greeting tells of the item, to its end");
     check(mhfu::game::pouch_page::announced(), "and the hunter has heard it");
     frame(runtime);
+    keep_stock(memory);
     check(line(kGreeting, 1) == 7u && line(kGreeting, 3) == 7u, "the next talk greets as before");
     memory.store8(kNpc + kNpcNews, 0u);
     call(kStoreLines, kNpc, 0u, kTalk, 1u);
@@ -342,6 +360,7 @@ void test_frame() {
     memory.store16(kSys + 0x6AEA6u + 2u * 4u, kItem);
     memory.store16(kSys + 0x6AEA6u + 2u * 4u + 2u, 1u);
     frame(runtime);
+    keep_stock(memory);
     check(mhfu::game::pouch_page::owned() && mhfu::game::pouch_page::active(), "bought, the page is the hunter's");
     check(memory.load16(kStore + kStoreRow + kRowBytes + kRowGreyed) == 1u &&
             memory.load16(kStore + kStoreRow + kRowGreyed) == 0u,
@@ -350,6 +369,7 @@ void test_frame() {
             memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u,
         "the bought item is gone, the save's own stay");
     frame(runtime);
+    keep_stock(memory);
     check(memory.load32(kVillageStock) != kVillageLists[0], "owned, the store still lists it");
     check(call(kObtainedCheck, kItem, 0u) == 1u, "obtained, so the list greys it out");
     check(call(kPouchCount, kItem, kPaneCountReturn) == 1u, "and the pane counts one, the most, in red");

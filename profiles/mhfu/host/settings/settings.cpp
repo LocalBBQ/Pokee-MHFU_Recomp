@@ -641,6 +641,10 @@ const std::vector<Field> &fields() {
             [](Settings &s, const std::string &t) { return parse_bool(t, s.event_quests); },
             [](const Settings &s) { return std::string(s.event_quests ? "1" : "0"); },
             [](Settings &s, const char *t) { s.event_quests = variable_flag(t); }},
+        {"game.throwing_knives", "MHFU_THROWING_KNIVES",
+            [](Settings &s, const std::string &t) { return parse_bool(t, s.throwing_knives); },
+            [](const Settings &s) { return std::string(s.throwing_knives ? "1" : "0"); },
+            [](Settings &s, const char *t) { s.throwing_knives = variable_flag(t); }},
         {"game.gather_icon_size", "MHFU_GATHER_ICON_SIZE",
             [](Settings &s, const std::string &t) {
                 return parse_uint(t, kMinGatherIconSize, kMaxGatherIconSize, s.gather_icon_size);

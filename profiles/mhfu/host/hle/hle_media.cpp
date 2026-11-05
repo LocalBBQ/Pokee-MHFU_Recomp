@@ -21,6 +21,7 @@
 #include "game/item_atlas.hpp"
 #include "game/empty_item_slot.hpp"
 #include "game/give_rarity.hpp"
+#include "game/throwing_knives.hpp"
 #include "game/true_attack.hpp"
 #include "game/true_element.hpp"
 #include "game/hall_equipment.hpp"
@@ -31,6 +32,7 @@
 #include "game/title_menu.hpp"
 #include "game/key_quests.hpp"
 #include "game/pouch_page.hpp"
+#include "game/shop_stock.hpp"
 #include "game/layered_armor.hpp"
 #include "mods/mhfu_mods.hpp"
 #include "game/sharpness_gauge.hpp"
@@ -397,10 +399,18 @@ void present_frame(Runtime &rt) {
     game::give_rarity::frame(rt);
     game::true_attack::frame(rt);
     game::true_element::frame(rt);
+    game::throwing_knives::frame(rt);
     game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
     game::item_sets::frame(rt);
     game::pouch_page::frame(rt);
     game::backpack::frame(rt);
+    // The stores' lists, as the knives and the Lg Backpack have just said.
+    {
+        game::GuestRam ram(rt.memory());
+        constexpr std::array<game::shop_stock::Stocking, 2> kStockings{
+            &game::throwing_knives::stock, &game::backpack::stock};
+        (void)game::shop_stock::keep(ram, kStockings);
+    }
     game::hall_meal::frame(rt, &call_guest_with_result);
     game::key_quests::frame(rt.memory(), &allocate_key_quest_block, &mods::entry_bytes);
     game::event_quests::frame(rt, &allocate_event_quest_block);
