@@ -257,6 +257,7 @@ void test_frame() {
             slot + 32u + static_cast<std::uint32_t>(i), i < name.size() ? static_cast<std::uint8_t>(name[i]) : 0u);
     runtime.register_function(kGuideCheck, &stand_in, "guide_stand_in");
     runtime.register_function(kObtainedCheck, &stand_in, "obtained_stand_in");
+    runtime.register_function(kPouchCount, &stand_in, "pouch_count_stand_in");
     runtime.register_function(kStoreLines, &stand_in, "store_lines_stand_in");
     runtime.register_function(kTalkText, &stand_in, "talk_text_stand_in");
     // A talk with the village store, and its NPC.
@@ -336,6 +337,7 @@ void test_frame() {
         "the purchase and the real Guides get the game's answer");
     check(call(kObtainedCheck, kItem, 0u) == 0u && call(kObtainedCheck, 12u, 0u) == 7u,
         "not owned, the item is not obtained; other items are the game's");
+    check(call(kPouchCount, kItem, kPaneCountReturn) == 7u, "not owned, the pane counts what the pouch holds");
 
     memory.store16(kSys + 0x6AEA6u + 2u * 4u, kItem);
     memory.store16(kSys + 0x6AEA6u + 2u * 4u + 2u, 1u);
@@ -350,6 +352,9 @@ void test_frame() {
     frame(runtime);
     check(memory.load32(kVillageStock) != kVillageLists[0], "owned, the store still lists it");
     check(call(kObtainedCheck, kItem, 0u) == 1u, "obtained, so the list greys it out");
+    check(call(kPouchCount, kItem, kPaneCountReturn) == 1u, "and the pane counts one, the most, in red");
+    check(call(kPouchCount, kItem, 0x09A84A38u) == 7u && call(kPouchCount, 12u, kPaneCountReturn) == 7u,
+        "the pouch's count elsewhere, and of other items, is the game's");
     check(memory.load32(table + kBuyLine * 4u) == 0x4000u, "and the shopkeeper says what she said");
     check(memory.load32(table + kBuyFullLine * 4u) == kBuyFullText - table, "and the full pouch says 32");
 }

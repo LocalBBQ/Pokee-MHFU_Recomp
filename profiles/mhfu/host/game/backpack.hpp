@@ -63,6 +63,12 @@
 //   and the item at + 0xC; the byte at + 0x24 is 0 when buying. It is built
 //   when the store opens, so once bought the item's row is greyed out by
 //   hand, in the store the list's Guide check last asked about.
+// - Beside the list, the store's pane (lobby_task 0x09A83208) shows how many
+//   the hunter has: for a Guide whether it is obtained, else the pouch's
+//   count (0x0885AED0, called from 0x09A832B0) and the box's, in red at the
+//   most the item's record lets the pouch hold, one for the Guides. Its Guide
+//   check is inside its own unit, so the pouch's count is answered instead:
+//   one once the hunter owns the page, as for an obtained Guide.
 // - A talk (lobby_task 0x09A95D08) takes the NPC's type from + 0x480 into
 //   + 0x3B and asks the type's lines (0x09A95D90) for its line at + 0x3C. The
 //   village store's (type 1, 0x09A98F20(talk, npc, check)) are its news, once
@@ -109,6 +115,9 @@ inline constexpr std::uint32_t kSavedPouch = 0x43C8u;
 inline constexpr std::uint32_t kGuideCheck = 0x09A80230u;
 inline constexpr std::uint32_t kListGuideReturn = 0x09A7F254u;
 inline constexpr std::uint32_t kObtainedCheck = 0x0885C5CCu;
+// The pouch's count of an item, and where the store's pane calls it.
+inline constexpr std::uint32_t kPouchCount = 0x0885AED0u;
+inline constexpr std::uint32_t kPaneCountReturn = 0x09A832B8u;
 
 // The store's list.
 inline constexpr std::uint32_t kStoreMode = 0x24u;
