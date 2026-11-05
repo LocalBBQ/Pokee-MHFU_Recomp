@@ -1,5 +1,6 @@
-// Backpack Lg.: High Rank in the Guild and the village, the item's record and
-// text, the stores' stock and line, and the purchase, on stand-ins for the
+// Lg Backpack: High Rank in the Guild and the village, the item's record and
+// text, the stores' stock and line, the shopkeeper's news and the purchase,
+// on stand-ins for the
 // game's memory. Run from pouch_page_tests.cpp. No game data.
 #include "game/backpack.hpp"
 
@@ -122,15 +123,26 @@ template <typename Memory> void write_stock(Memory &ram) {
 }
 
 void test_stock() {
+    using Ids = std::vector<std::uint16_t>;
+    check(with_item({5u, kOrganizerGuide, kTemplateItem, 6u}) == Ids{5u, kOrganizerGuide, kTemplateItem, kItem, 6u},
+        "the item goes after the Backpacker Guide");
+    check(with_item({5u, kOrganizerGuide, 6u}) == Ids{5u, kOrganizerGuide, kItem, 6u},
+        "or after the Organizer Guide, in a list without the Backpacker Guide");
+    check(with_item({5u, 6u}) == Ids{5u, 6u, kItem} && with_item({}) == Ids{kItem}, "or last, in a list of neither");
+
     BufferRam ram(0x08800000u, 0x01400000u);
     write_stock(ram);
+    ram.store16(kVillageLists[7] + 2u, kTemplateItem);
     const std::uint32_t end = offer_stock(ram, true, kStockCopies);
     check(end > kStockCopies && end <= kWindowEnd, "the copies fit the window");
+    check(kNewsText + kNewsLineText.size() < kStockCopies && kBuyFullText + kBuyFullLineText.size() < kNewsText,
+        "the texts fit before the copies");
     const std::uint32_t village = ram.load32(kVillageStock + 2u * 4u);
-    check(village != kVillageLists[2] && read_ids(ram, village) == std::vector<std::uint16_t>{kItem, 9u, 11u},
-        "offered, the village store's list has the item first");
-    check(read_ids(ram, ram.load32(kHallStock + 4u * 4u)) == std::vector<std::uint16_t>{kItem, 11u, 11u},
-        "and so has the Guild Hall's");
+    check(village != kVillageLists[2] && read_ids(ram, village) == Ids{9u, 11u, kItem},
+        "offered, the village store's list has the item");
+    check(read_ids(ram, ram.load32(kVillageStock + 7u * 4u)) == Ids{14u, kTemplateItem, kItem},
+        "next to the Backpacker Guide where it sells one");
+    check(read_ids(ram, ram.load32(kHallStock + 4u * 4u)) == Ids{11u, 11u, kItem}, "and so has the Guild Hall's");
     check(offer_stock(ram, true, kStockCopies) == end && ram.load32(kVillageStock + 2u * 4u) == village,
         "offering again keeps the same copies");
     offer_stock(ram, false, kStockCopies);
@@ -176,6 +188,40 @@ void test_purchase() {
     check(ram.load32(kSys + kZenny) == kMostZenny, "a refund stops at the most zenny");
 }
 
+void test_grey_out() {
+    BufferRam ram(0x08800000u, 0x01400000u);
+    constexpr std::uint32_t kStore = 0x09A00000u;
+    const auto row = [](std::uint32_t i) { return kStore + kStoreRow + i * kRowBytes; };
+    ram.store32(kStore + kStoreRows, 3u);
+    ram.store16(row(0u) + kRowItem, 12u);
+    ram.store16(row(1u) + kRowItem, kItem);
+    ram.store16(row(3u) + kRowItem, kItem); // past the list's end
+    check(grey_out(ram, kStore), "a list to buy from");
+    check(ram.load16(row(1u) + kRowGreyed) == 1u && ram.load16(row(0u) + kRowGreyed) == 0u,
+        "the item's row is greyed out, the others are not");
+    check(ram.load16(row(3u) + kRowGreyed) == 0u, "rows past the list's end stay");
+    ram.store16(row(1u) + kRowGreyed, 0u);
+    ram.store8(kStore + kStoreMode, 1u);
+    check(!grey_out(ram, kStore) && ram.load16(row(1u) + kRowGreyed) == 0u, "a list to sell from is left alone");
+    ram.store8(kStore + kStoreMode, 0u);
+    ram.store32(kStore + kStoreRows, kMostRows + 1u);
+    check(!grey_out(ram, kStore) && !grey_out(ram, 0u), "nor is what is not a store's list");
+}
+
+void test_village_store_talk() {
+    BufferRam ram(0x08800000u, 0x01400000u);
+    constexpr std::uint32_t kTalk = 0x09A10000u, kRecord = 0x09A20000u;
+    ram.store8(kTalk + kTalkType, kVillageStore);
+    ram.store32(kTalk + kTalkRecord, kRecord);
+    ram.store32(kRecord, kVillageStore);
+    check(village_store_talk(ram, kTalk), "a talk with the village store");
+    ram.store32(kRecord, 4u);
+    check(!village_store_talk(ram, kTalk), "a record of another type is not");
+    ram.store32(kRecord, kVillageStore);
+    ram.store8(kTalk + kTalkType, 4u);
+    check(!village_store_talk(ram, kTalk) && !village_store_talk(ram, 0u), "nor a talk with another NPC, nor none");
+}
+
 int stand_in_calls = 0;
 void stand_in(psprecomp::Runtime &, psprecomp::AllegrexContext &ctx) {
     ++stand_in_calls;
@@ -211,6 +257,16 @@ void test_frame() {
             slot + 32u + static_cast<std::uint32_t>(i), i < name.size() ? static_cast<std::uint8_t>(name[i]) : 0u);
     runtime.register_function(kGuideCheck, &stand_in, "guide_stand_in");
     runtime.register_function(kObtainedCheck, &stand_in, "obtained_stand_in");
+    runtime.register_function(kStoreLines, &stand_in, "store_lines_stand_in");
+    runtime.register_function(kTalkText, &stand_in, "talk_text_stand_in");
+    // A talk with the village store, and its NPC.
+    constexpr std::uint32_t kTalk = 0x08B00000u, kRecord = 0x08B10000u, kNpc = 0x08B20000u, kStore = 0x08B30000u;
+    memory.store8(kTalk + kTalkType, kVillageStore);
+    memory.store32(kTalk + kTalkRecord, kRecord);
+    memory.store32(kRecord, kVillageStore);
+    // A store's list to buy from, with the item.
+    memory.store32(kStore + kStoreRows, 2u);
+    memory.store16(kStore + kStoreRow + kRowBytes + kRowItem, kItem);
     // Its text: table 0 with lines 491, 492 and 495.
     constexpr std::uint32_t kList = 0x08A00000u, kBlock = 0x08A80000u;
     memory.store32(kResourcesPointer, kList);
@@ -221,12 +277,20 @@ void test_frame() {
     for (std::uint32_t line : {kBuyLine, kBuyFullLine, kBuyToBoxLine}) memory.store32(table + line * 4u, 0x4000u);
     // The item text table, so the name can be pointed.
     memory.store32(kTextBlock + 3u * 4u, 0x40u);
-    const auto call = [&](std::uint32_t address, std::uint32_t item, std::uint32_t ra) {
+    const auto call = [&](std::uint32_t address, std::uint32_t item, std::uint32_t ra, std::uint32_t a0 = 0u,
+                          std::uint32_t a2 = 0u) {
         psprecomp::AllegrexContext ctx{};
+        ctx.gpr[4] = a0;
         ctx.gpr[5] = item;
+        ctx.gpr[6] = a2;
         ctx.gpr[31] = ra;
         runtime.function_at(address)(runtime, ctx);
         return ctx.gpr[2];
+    };
+    // The text of a line of the talk, `shown` characters in.
+    const auto line = [&](std::uint32_t id, std::int32_t shown) {
+        memory.store32(kTalk + kTalkShown, static_cast<std::uint32_t>(shown));
+        return call(kTalkText, id, 0u, kTalk);
     };
 
     mhfu::game::pouch_page::frame(runtime);
@@ -235,6 +299,7 @@ void test_frame() {
     check(memory.load32(kVillageStock) == kVillageLists[0] && memory.load32(table + kBuyLine * 4u) == 0x4000u,
         "below High Rank nothing is offered");
     check(memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u, "the items the save held stay");
+    check(line(kGreeting, 1) == 7u, "below High Rank the shopkeeper greets as she does");
 
     memory.store8(kSys + kHunterRank, 3u);
     frame(runtime);
@@ -244,9 +309,28 @@ void test_frame() {
         "and the shopkeeper says it just came in");
     check(memory.load32(table + kBuyFullLine * 4u) == 0x4000u, "without the page the full pouch says 24");
     check(memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u, "what the save held is still not a purchase");
+
+    call(kStoreLines, 0u, 0u, kTalk, 1u);
+    check(memory.load8(kNpc + kNpcNews) == 0u, "the store's check of another NPC leaves this one");
+    call(kStoreLines, kNpc, 0u, kTalk, 0u);
+    check(memory.load8(kNpc + kNpcNews) == 0u, "talking is not checking");
+    call(kStoreLines, kNpc, 0u, kTalk, 1u);
+    check(memory.load8(kNpc + kNpcNews) == 1u, "checked, the shopkeeper shows she has news");
     stand_in_calls = 0;
-    check(
-        call(kGuideCheck, kItem, kListGuideReturn) == 1u && stand_in_calls == 0, "the list takes the item for a Guide");
+    check(line(4u, 1) == 7u && line(kGreeting, 2) == 7u && stand_in_calls == 2,
+        "her own news, and a greeting already under way, are the game's");
+    check(line(kGreeting, 1) == kNewsText && line(kGreeting, 5) == kNewsText && line(kGreeting, -1) == kNewsText,
+        "a talk that begins with the greeting tells of the item, to its end");
+    check(mhfu::game::pouch_page::announced(), "and the hunter has heard it");
+    frame(runtime);
+    check(line(kGreeting, 1) == 7u && line(kGreeting, 3) == 7u, "the next talk greets as before");
+    memory.store8(kNpc + kNpcNews, 0u);
+    call(kStoreLines, kNpc, 0u, kTalk, 1u);
+    check(memory.load8(kNpc + kNpcNews) == 0u, "heard, there is no more news");
+
+    stand_in_calls = 0;
+    check(call(kGuideCheck, kItem, kListGuideReturn, kStore) == 1u && stand_in_calls == 0,
+        "the list takes the item for a Guide");
     check(call(kGuideCheck, kItem, 0x09A7FEF4u) == 7u && call(kGuideCheck, 829u, kListGuideReturn) == 7u &&
             stand_in_calls == 2,
         "the purchase and the real Guides get the game's answer");
@@ -257,6 +341,9 @@ void test_frame() {
     memory.store16(kSys + 0x6AEA6u + 2u * 4u + 2u, 1u);
     frame(runtime);
     check(mhfu::game::pouch_page::owned() && mhfu::game::pouch_page::active(), "bought, the page is the hunter's");
+    check(memory.load16(kStore + kStoreRow + kRowBytes + kRowGreyed) == 1u &&
+            memory.load16(kStore + kStoreRow + kRowGreyed) == 0u,
+        "and the open store greys the item out at once");
     check(memory.load32(mhfu::game::pouch_page::kPouch + 2u * 4u) == 0u &&
             memory.load16(kSys + kBox + 5u * 4u + 2u) == 99u,
         "the bought item is gone, the save's own stay");
@@ -275,5 +362,7 @@ void backpack_tests(int &failures) {
     test_item_and_text();
     test_stock();
     test_purchase();
+    test_grey_out();
+    test_village_store_talk();
     test_frame();
 }

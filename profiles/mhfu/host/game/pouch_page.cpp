@@ -339,6 +339,10 @@ void Store::load_file() {
             page->owned = true;
             continue;
         }
+        if (key == "announced") {
+            page->announced = true;
+            continue;
+        }
         for (std::size_t a = 0; a < kArrayNames.size(); ++a)
             if (key == kArrayNames[a]) page->slots[a] = parse_slots(fields);
     }
@@ -373,6 +377,7 @@ bool Store::save() {
         for (const auto &[hunter, page] : hunters_) {
             out << "hunter " << hunter << "\n";
             if (page.owned) out << "owned\n";
+            if (page.announced) out << "announced\n";
             for (std::size_t a = 0; a < kArrayNames.size(); ++a)
                 out << kArrayNames[a] << slots_text(page.slots[a]) << "\n";
         }
@@ -515,9 +520,11 @@ void frame(psprecomp::Runtime &runtime) {
 
 void game_saved(psprecomp::GuestMemory &memory) {
     State &s = state();
-    if (!s.active || s.hunter.empty()) return;
+    if (s.hunter.empty() || (!s.active && !s.page.announced)) return;
     GuestRam ram(memory);
-    store().set(s.hunter, page_of(ram));
+    HunterPage page = s.active ? page_of(ram) : s.page;
+    page.announced = s.page.announced;
+    store().set(s.hunter, page);
     if (!store().save())
         std::cerr << "[pouch page] could not write " << store().path().string() << std::endl;
     else if (s.trace)
@@ -550,6 +557,14 @@ void grant(psprecomp::Runtime &runtime) {
     s.mirror = fill_blocks(ram, sys, s.page);
     s.active = true;
     set_hooks(runtime, true);
+}
+
+bool announced() {
+    return !state().hunter.empty() && state().page.announced;
+}
+
+void announce() {
+    if (!state().hunter.empty()) state().page.announced = true;
 }
 
 } // namespace mhfu::game::pouch_page
