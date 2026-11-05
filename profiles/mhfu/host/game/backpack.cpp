@@ -255,7 +255,7 @@ struct State {
     bool offered{};
     std::optional<std::uint32_t> name, description;
     std::uint32_t lobby_block{};
-    std::optional<std::uint32_t> buy, buy_to_box, buy_full;
+    std::optional<std::uint32_t> buy_full;
     // How many of the item the hunter had, to tell a purchase.
     std::string hunter;
     std::optional<std::uint32_t> had;
@@ -371,8 +371,6 @@ void frame(psprecomp::Runtime &runtime) {
     if (ram.load8(kNameText) != static_cast<std::uint8_t>(kName[0])) {
         write_text(ram, kNameText, kName);
         write_text(ram, kDescriptionText, kDescription);
-        write_text(ram, kBuyText, kBuyLineText);
-        write_text(ram, kBuyToBoxText, kBuyToBoxLineText);
         write_text(ram, kBuyFullText, kBuyFullLineText);
         write_text(ram, kNewsText, kNewsLineText);
     }
@@ -427,12 +425,8 @@ void frame(psprecomp::Runtime &runtime) {
     if (block == 0u) return;
     if (block != s.lobby_block) {
         s.lobby_block = block;
-        s.buy.reset();
-        s.buy_to_box.reset();
         s.buy_full.reset();
     }
-    point_entry(ram, block, kStoreTable, kBuyLine, offered ? kBuyText : 0u, s.buy);
-    point_entry(ram, block, kStoreTable, kBuyToBoxLine, offered ? kBuyToBoxText : 0u, s.buy_to_box);
     point_entry(ram, block, kStoreTable, kBuyFullLine, pouch_page::active() ? kBuyFullText : 0u, s.buy_full);
 }
 
