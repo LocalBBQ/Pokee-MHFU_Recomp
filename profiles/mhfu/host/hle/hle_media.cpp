@@ -21,6 +21,7 @@
 #include "game/item_atlas.hpp"
 #include "game/empty_item_slot.hpp"
 #include "game/give_rarity.hpp"
+#include "game/bed_stamina.hpp"
 #include "game/throwing_knives.hpp"
 #include "game/true_attack.hpp"
 #include "game/true_element.hpp"
@@ -400,6 +401,7 @@ void present_frame(Runtime &rt) {
     game::true_attack::frame(rt);
     game::true_element::frame(rt);
     game::throwing_knives::frame(rt);
+    game::bed_stamina::frame(rt);
     game::hall_equipment::frame(rt, &call_guest_function, &allocate_guest_block);
     game::item_sets::frame(rt);
     game::pouch_page::frame(rt);

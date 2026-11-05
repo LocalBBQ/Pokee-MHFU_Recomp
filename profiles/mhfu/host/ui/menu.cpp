@@ -1940,6 +1940,14 @@ void Menu::mods() {
             s.throwing_knives = !s.throwing_knives;
             settings::save();
         }
+        if (toggle_row("Bed Restores Stamina", s.bed_stamina,
+                options_for("game.bed_stamina",
+                    "On (default): sleeping in a camp bed also fills your stamina back up to 100 if it has "
+                    "dropped below, as fast as it fills your health. More from a meal or a steak is kept. Off: the "
+                    "bed restores health only, as in the game."))) {
+            s.bed_stamina = !s.bed_stamina;
+            settings::save();
+        }
     }
     mods_page(back_);
     if (take_mods_restart_request()) {

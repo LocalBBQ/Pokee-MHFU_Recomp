@@ -279,6 +279,7 @@ set(MHFU_HOST_SOURCES
     host/game/empty_item_slot.cpp
     host/game/give_rarity.cpp
     host/game/throwing_knives.cpp
+    host/game/bed_stamina.cpp
     host/game/shop_stock.cpp
     host/game/true_attack.cpp
     host/game/true_element.cpp
@@ -759,6 +760,27 @@ target_link_libraries(mhfu_throwing_knives_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_throwing_knives_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_throwing_knives_tests COMMAND mhfu_throwing_knives_tests)
+endif()
+
+# Bed stamina: the code check, the own hunter, the restore and the watch of a
+# sleep, on a stand-in hunter. No game data.
+add_executable(mhfu_bed_stamina_tests
+    tests/bed_stamina_tests.cpp
+    host/game/bed_stamina.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+target_include_directories(mhfu_bed_stamina_tests PRIVATE "${MHFU_PROFILE_DIR}/host")
+target_link_libraries(mhfu_bed_stamina_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_bed_stamina_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_bed_stamina_tests COMMAND mhfu_bed_stamina_tests)
 endif()
 
 # The stores' lists: the code check, the copies and their reuse, both items in
