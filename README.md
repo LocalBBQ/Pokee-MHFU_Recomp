@@ -99,7 +99,7 @@ Downloads for Windows and Linux (the Steam Deck included) are on the [releases p
 
 ### Windows: slow starts and Microsoft Defender
 
-Microsoft Defender scans `Pokee.exe` and the overlay libraries in `overlays\` as the program loads them. Releases up to 1.0.0 shipped 290 overlay libraries, one per overlay, and the scans could make a start take far longer than it should. Later builds link the overlays into four libraries, one per memory slot. If a start is still slow, exclude Pokee's folders from scanning:
+Microsoft Defender scans `Pokee.exe` and the overlay libraries in `overlays\` as the program loads them. Releases up to 1.1.0 shipped one overlay library per overlay (298 in the 1.1.0 Windows zips), and the scans could make a start take far longer than it should. From 1.1.1 the overlays are linked into four libraries, one per memory slot. If a start is still slow, exclude Pokee's folders from scanning:
 
 1. Open **Windows Security → Virus & threat protection → Manage settings** (under *Virus & threat protection settings*).
 2. Scroll to **Exclusions** and choose **Add or remove exclusions → Add an exclusion → Folder**.
