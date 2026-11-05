@@ -267,6 +267,10 @@ struct Settings {
     // Dragonite Ore combines into one (game/throwing_knives.hpp). On by
     // default. Off: the game's supply items.
     bool throwing_knives{true};
+    // Sleeping in a camp bed fills stamina below 100 back up to 100 as it
+    // fills health (game/bed_stamina.hpp). On by default. Off: the bed gives
+    // back health only, as in the game.
+    bool bed_stamina{true};
     // The mark's size, in percent of the usual disc (kMinGatherIconSize to
     // kMaxGatherIconSize). A larger mark keeps the same proportions.
     std::uint32_t gather_icon_size{100};
