@@ -168,6 +168,8 @@ using Mirror = std::array<std::array<std::uint32_t, kGameSlots>, kArrays.size()>
 using PageSlots = std::array<Slot, kPageSlots>;
 struct HunterPage {
     bool owned{};
+    // The village shopkeeper has told the hunter of the Lg Backpack.
+    bool announced{};
     std::array<PageSlots, kArrays.size()> slots{};
     friend bool operator==(const HunterPage &, const HunterPage &) = default;
 };
@@ -216,5 +218,9 @@ void game_loaded();
 [[nodiscard]] bool enabled();
 // Gives the hunter in memory the page, kept when the game next saves.
 void grant(psprecomp::Runtime &runtime);
+// The hunter in memory has heard the shopkeeper's news of the Lg Backpack;
+// announce() records that, kept when the game next saves.
+[[nodiscard]] bool announced();
+void announce();
 
 } // namespace mhfu::game::pouch_page
