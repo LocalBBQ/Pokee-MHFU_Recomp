@@ -266,6 +266,7 @@ struct State {
     std::uint32_t news_talk{};
     psprecomp::Runtime::RecompiledFunction guide_check{};
     psprecomp::Runtime::RecompiledFunction obtained_check{};
+    psprecomp::Runtime::RecompiledFunction pouch_count{};
     psprecomp::Runtime::RecompiledFunction store_lines{};
     psprecomp::Runtime::RecompiledFunction talk_text{};
 };
@@ -299,6 +300,19 @@ void obtained_check(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx
     }
     ctx.pc = kObtainedCheck;
     state().obtained_check(runtime, ctx);
+}
+
+// 0x0885AED0(?, item): how many of the item the pouch holds. In the store's
+// pane, the item counts one once the hunter owns the page, the most it can
+// be, as an obtained Guide.
+void pouch_count(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    if ((ctx.gpr[5] & 0xFFFFu) == kItem && ctx.gpr[31] == kPaneCountReturn && pouch_page::enabled() &&
+        pouch_page::owned()) {
+        answer(ctx, 1u);
+        return;
+    }
+    ctx.pc = kPouchCount;
+    state().pouch_count(runtime, ctx);
 }
 
 // 0x09A98F20(talk, npc, check): the village store's news. Checked, the NPC
@@ -366,6 +380,8 @@ void frame(psprecomp::Runtime &runtime) {
     point_entry(ram, kTextBlock, kDescriptionTable, kItem, kDescriptionText, s.description);
     if (runtime.function_at(kObtainedCheck) != nullptr && runtime.function_at(kObtainedCheck) != &obtained_check)
         (void)hooks::wrap(runtime, kObtainedCheck, &obtained_check, s.obtained_check, "mhfu_backpack_obtained");
+    if (runtime.function_at(kPouchCount) != nullptr && runtime.function_at(kPouchCount) != &pouch_count)
+        (void)hooks::wrap(runtime, kPouchCount, &pouch_count, s.pouch_count, "mhfu_backpack_pouch_count");
 
     const std::uint32_t sys = item_sets::game_sys(ram);
     const std::string hunter = sys != 0u ? item_sets::hunter_name(ram, sys) : std::string{};
