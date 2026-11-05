@@ -262,6 +262,11 @@ struct Settings {
     // after the save's own event quests (game/event_quests.hpp). On by
     // default; without such quests nothing changes. Off: the save's alone.
     bool event_quests{true};
+    // The five throwing knives are items, not supply items; the Throwing
+    // Knife is sold in the shops for 750z and Whetstone + Machalite or
+    // Dragonite Ore combines into one (game/throwing_knives.hpp). On by
+    // default. Off: the game's supply items.
+    bool throwing_knives{true};
     // The mark's size, in percent of the usual disc (kMinGatherIconSize to
     // kMaxGatherIconSize). A larger mark keeps the same proportions.
     std::uint32_t gather_icon_size{100};

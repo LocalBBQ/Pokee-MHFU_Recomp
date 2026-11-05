@@ -37,10 +37,11 @@
 //   0x09A7FD50 picks by the store's type: the village store (type 1) by
 //   village progress from the eight lists at 0x09B070A8, the Guild Hall's
 //   (type 4) by GameSys + 0x44BD from the five at 0x09B070D0. While the item
-//   is offered, those pointers are a copy of each list with the item after
-//   the Backpacker Guide (830), else the Organizer Guide (829), else last:
-//   the village's later lists have both, its earlier ones the Organizer
-//   Guide alone, the Guild Hall's neither.
+//   is offered, those lists have the item after the Backpacker Guide (830),
+//   else the Organizer Guide (829), else last: the village's later lists have
+//   both, its earlier ones the Organizer Guide alone, the Guild Hall's
+//   neither. game/shop_stock.hpp keeps the lists, which the Throwing Knife
+//   changes too.
 // - The store's line is a text of lobby_task's: table 0 of the text block
 //   that 0x09A7B7D8 finds as resource 4 in the list at *(0x09A0B680) +
 //   0x83C030 (512 entries of 12 bytes: the id, then the block). 492, what
@@ -159,22 +160,13 @@ inline constexpr std::uint32_t kLobbyText = 4u;
 inline constexpr int kStoreTable = 0;
 inline constexpr std::uint32_t kBuyFullLine = 492u;
 
-// The stock lists, as lobby_task (ULUS-10391) has them.
-inline constexpr std::uint32_t kVillageStock = 0x09B070A8u;
-inline constexpr std::uint32_t kHallStock = 0x09B070D0u;
-inline constexpr std::array<std::uint32_t, 8> kVillageLists{
-    0x09B06510u, 0x09B06580u, 0x09B065F8u, 0x09B06678u, 0x09B06710u, 0x09B067B0u, 0x09B06858u, 0x09B06900u};
-inline constexpr std::array<std::uint32_t, 5> kHallLists{0x09B069B0u, 0x09B06A20u, 0x09B06A60u, 0x09B06AA0u, 0x09B06AD8u};
-inline constexpr std::uint32_t kMostStock = 200u;
-
 // What the host keeps in its reserved window (kernel/kernel.hpp), after the
 // pouch page's blocks.
 inline constexpr std::uint32_t kNameText = 0x08803380u;
 inline constexpr std::uint32_t kDescriptionText = 0x08803390u;
 inline constexpr std::uint32_t kBuyFullText = 0x08803500u;
 inline constexpr std::uint32_t kNewsText = 0x08803580u;
-inline constexpr std::uint32_t kStockCopies = 0x08803640u;
-inline constexpr std::uint32_t kWindowEnd = 0x08803F00u;
+inline constexpr std::uint32_t kTextsEnd = 0x08803640u;
 
 inline constexpr std::string_view kName = "Lg Backpack";
 // As the game's own: three lines of at most 26 characters.
@@ -222,11 +214,9 @@ void write_text(Ram &ram, std::uint32_t address, std::string_view text);
 // The list with the item after the Backpacker Guide, else the Organizer
 // Guide, else last.
 [[nodiscard]] std::vector<std::uint16_t> with_item(std::vector<std::uint16_t> ids);
-// Offered: each table's pointers go to copies of their lists with the item,
-// built from `free`; not offered, back to the game's lists. Only while a
-// table still holds the game's lists or the copies. Returns where the copies
-// end.
-std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free);
+// A store's list as game/shop_stock.hpp keeps it: from High Rank on, the
+// village store's and the Guild Hall's with the item, else as it is.
+[[nodiscard]] std::vector<std::uint16_t> stock(std::uint32_t slot, std::vector<std::uint16_t> ids);
 // Greys the item's row out in a store's list of things to buy. False when
 // there is no such list at `store`.
 bool grey_out(Ram &ram, std::uint32_t store);

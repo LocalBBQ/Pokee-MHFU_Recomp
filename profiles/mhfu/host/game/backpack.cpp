@@ -5,12 +5,14 @@
 #include "game/item_sets.hpp"
 #include "game/pouch_page.hpp"
 #include "game/pouch_slots.hpp"
+#include "game/shop_stock.hpp"
 #include "psprecomp/runtime.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mhfu::game::backpack {
@@ -18,19 +20,6 @@ namespace {
 
 std::uint32_t slot_word(std::uint16_t item, std::uint16_t count) {
     return static_cast<std::uint32_t>(item) | (static_cast<std::uint32_t>(count) << 16u);
-}
-
-// Reads a 0xFFFF-ended list of at most kMostStock ids; none when it does not
-// end in that many.
-std::optional<std::vector<std::uint16_t>> read_list(const Ram &ram, std::uint32_t list) {
-    std::vector<std::uint16_t> ids;
-    for (std::uint32_t i = 0; i < kMostStock; ++i) {
-        if (!ram.contains(list + i * 2u, 2u)) return std::nullopt;
-        const std::uint16_t id = ram.load16(list + i * 2u);
-        if (id == 0xFFFFu) return ids;
-        ids.push_back(id);
-    }
-    return std::nullopt;
 }
 
 } // namespace
@@ -146,48 +135,6 @@ std::vector<std::uint16_t> with_item(std::vector<std::uint16_t> ids) {
     return ids;
 }
 
-std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free) {
-    struct Table {
-        std::uint32_t address;
-        std::span<const std::uint32_t> lists;
-    };
-    const std::array<Table, 2> tables{{{kVillageStock, kVillageLists}, {kHallStock, kHallLists}}};
-    for (const Table &table : tables) {
-        // Where each list's copy goes, and whether the table is still the
-        // game's or ours throughout.
-        std::vector<std::uint32_t> copies;
-        std::vector<std::vector<std::uint16_t>> lists;
-        bool ours = ram.contains(table.address, table.lists.size() * 4u);
-        for (std::size_t i = 0; ours && i < table.lists.size(); ++i) {
-            const auto list = read_list(ram, table.lists[i]);
-            if (!list) {
-                ours = false;
-                break;
-            }
-            const std::uint32_t copy = free;
-            free += static_cast<std::uint32_t>((list->size() + 2u) * 2u + 3u) & ~3u;
-            const std::uint32_t pointer = ram.load32(table.address + static_cast<std::uint32_t>(i) * 4u);
-            if (pointer != table.lists[i] && pointer != copy) ours = false;
-            copies.push_back(copy);
-            lists.push_back(*list);
-        }
-        if (!ours || free > kWindowEnd) continue;
-        for (std::size_t i = 0; i < table.lists.size(); ++i) {
-            const std::uint32_t pointer_at = table.address + static_cast<std::uint32_t>(i) * 4u;
-            if (!offered) {
-                if (ram.load32(pointer_at) != table.lists[i]) ram.store32(pointer_at, table.lists[i]);
-                continue;
-            }
-            const std::vector<std::uint16_t> ids = with_item(lists[i]);
-            for (std::size_t j = 0; j < ids.size(); ++j)
-                ram.store16(copies[i] + static_cast<std::uint32_t>(j) * 2u, ids[j]);
-            ram.store16(copies[i] + static_cast<std::uint32_t>(ids.size()) * 2u, 0xFFFFu);
-            if (ram.load32(pointer_at) != copies[i]) ram.store32(pointer_at, copies[i]);
-        }
-    }
-    return free;
-}
-
 bool grey_out(Ram &ram, std::uint32_t store) {
     if (store == 0u || !ram.contains(store, kStoreRow + kMostRows * kRowBytes)) return false;
     const std::uint32_t rows = ram.load32(store + kStoreRows);
@@ -253,6 +200,8 @@ struct State {
     bool checked{};
     bool trace{};
     bool offered{};
+    // The stores list the item (stock).
+    bool listed{};
     std::optional<std::uint32_t> name, description;
     std::uint32_t lobby_block{};
     std::optional<std::uint32_t> buy_full;
@@ -356,6 +305,10 @@ void talk_text(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
 
 } // namespace
 
+std::vector<std::uint16_t> stock(std::uint32_t slot, std::vector<std::uint16_t> ids) {
+    return state().listed && shop_stock::village_or_hall(slot) ? with_item(std::move(ids)) : ids;
+}
+
 void frame(psprecomp::Runtime &runtime) {
     State &s = state();
     if (!s.checked) {
@@ -363,6 +316,7 @@ void frame(psprecomp::Runtime &runtime) {
         const char *text = std::getenv("MHFU_TRACE_POUCH_PAGE");
         s.trace = text != nullptr && *text != '\0' && std::string(text) != "0";
     }
+    s.listed = false;
     if (!pouch_page::enabled()) return;
     GuestRam ram(runtime.memory());
 
@@ -391,6 +345,8 @@ void frame(psprecomp::Runtime &runtime) {
     const bool lobby = layout::overlay_loaded(runtime.memory(), layout::kTaskSlot, "lobby_task.ovl");
     const bool unlocked = high_rank(ram, sys);
     const bool offered = lobby && unlocked && !pouch_page::owned();
+    // Listed from High Rank on, greyed out once bought, as the Guides are.
+    s.listed = unlocked;
 
     // Bought: more of the item than the hunter had, while it is offered.
     const Places places{sys + kBox, pouch_slots::first(sys), pouch_page::active() ? pouch_page::kSaved : sys + kSavedPouch,
@@ -419,8 +375,6 @@ void frame(psprecomp::Runtime &runtime) {
         (void)hooks::wrap(runtime, kStoreLines, &store_lines, s.store_lines, "mhfu_backpack_store_lines");
     if (runtime.function_at(kTalkText) != nullptr && runtime.function_at(kTalkText) != &talk_text)
         (void)hooks::wrap(runtime, kTalkText, &talk_text, s.talk_text, "mhfu_backpack_talk_text");
-    // Listed from High Rank on, greyed out once bought, as the Guides are.
-    offer_stock(ram, unlocked, kStockCopies);
     const std::uint32_t block = lobby_text_block(ram);
     if (block == 0u) return;
     if (block != s.lobby_block) {
