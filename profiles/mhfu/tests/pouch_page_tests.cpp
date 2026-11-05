@@ -387,10 +387,18 @@ void test_runtime(const std::filesystem::path &dir) {
     set_hunter(memory, u"Bo");
     frame(runtime);
     check(!active() && !runtime.site_hooks_active(), "another hunter kept Ann's page");
-    // Told of the Lg Backpack without the page: kept when the game saves.
+    // Told of the Lg Backpack without the page: kept at once, before any save.
     check(!announced(), "a hunter not told of the Lg Backpack was");
     announce();
     check(announced(), "announce() did not tell the hunter");
+    Store heard(dir / "pouch_page.txt");
+    check(heard.page("Bo").announced && !heard.page("Bo").owned, "the news was not kept until the game saved");
+    check(heard.page("Ann").owned && heard.page("Ann").slots[0][2] == Slot{77u, 2u},
+        "keeping the news changed another hunter's page");
+    // Reloaded without saving: still told.
+    game_loaded();
+    frame(runtime);
+    check(announced(), "a reload without saving brought the news back");
     game_saved(memory);
     Store told(dir / "pouch_page.txt");
     check(told.page("Bo").announced && !told.page("Bo").owned && told.page("Ann").owned,

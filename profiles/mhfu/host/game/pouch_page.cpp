@@ -564,7 +564,16 @@ bool announced() {
 }
 
 void announce() {
-    if (!state().hunter.empty()) state().page.announced = true;
+    State &s = state();
+    if (s.hunter.empty() || s.page.announced) return;
+    s.page.announced = true;
+    // Kept at once, not with the game's next save: heard and then reloaded
+    // without saving, the news is not told again. Only the flag is written;
+    // the page's slots stay as the last save left them.
+    HunterPage kept = store().page(s.hunter);
+    kept.announced = true;
+    store().set(s.hunter, kept);
+    if (!store().save()) std::cerr << "[pouch page] could not write " << store().path().string() << std::endl;
 }
 
 } // namespace mhfu::game::pouch_page

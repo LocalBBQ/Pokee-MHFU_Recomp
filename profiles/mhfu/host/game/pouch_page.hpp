@@ -219,7 +219,8 @@ void game_loaded();
 // Gives the hunter in memory the page, kept when the game next saves.
 void grant(psprecomp::Runtime &runtime);
 // The hunter in memory has heard the shopkeeper's news of the Lg Backpack;
-// announce() records that, kept when the game next saves.
+// announce() records that and writes it to pouch_page.txt at once, so a
+// reload without saving does not bring the news back.
 [[nodiscard]] bool announced();
 void announce();
 
