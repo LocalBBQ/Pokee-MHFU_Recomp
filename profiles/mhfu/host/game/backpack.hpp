@@ -177,7 +177,9 @@ inline constexpr std::uint32_t kStockCopies = 0x08803640u;
 inline constexpr std::uint32_t kWindowEnd = 0x08803F00u;
 
 inline constexpr std::string_view kName = "Lg Backpack";
-inline constexpr std::string_view kDescription = "A large backpack. Adds a\nfourth page to your pouch.";
+// As the game's own: three lines of at most 26 characters.
+inline constexpr std::string_view kDescription =
+    "A sturdy wyvernhide pack,\nroomy enough to haul home\nthe spoils of a long hunt.";
 // As wide as the shopkeeper's own lines: 22 characters, at most 7 lines.
 inline constexpr std::string_view kNewsLineText = "Welcome! We have a new\nitem in stock: the Lg\nBackpack! It "
                                                   "will let\nyou carry more items,\nwith a fourth page in\nyour "
