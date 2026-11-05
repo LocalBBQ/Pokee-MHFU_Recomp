@@ -3,6 +3,7 @@
 #include "corpus_identity.hpp"
 #include "install/executable_preparation.hpp"
 #include "install/game_identity.hpp"
+#include "install/installer.hpp"
 #include "kernel/iso_image.hpp"
 
 #include "psprecomp/common.hpp"
@@ -58,6 +59,26 @@ void rejects_unknown_executable() {
     check(threw, "an unknown executable is refused");
 }
 
+// The whole question reaches the dialog: a stray semicolon once cut it after
+// its first sentence, leaving buttons that answered nothing asked.
+void storage_question_text() {
+    using namespace mhfu::install;
+    ImageInfo info;
+    info.size_bytes = 846'000'000u;
+    info.title = "Monster Hunter Freedom Unite";
+    info.disc_id_display = "ULUS-10391";
+    const std::string text = storage_question("images/mhfu.iso", info, "data/MHFU");
+    const auto has = [&](const char *part) { return text.find(part) != std::string::npos; };
+    check(text.rfind("The image is Monster Hunter Freedom Unite (ULUS-10391) and passed its checks.\n\n", 0) == 0,
+        "the question names the image first");
+    check(has("Copy it into Pokee's data folder (recommended, 0.8 GB)"), "the question offers the copy with its size");
+    check(has("Or use it where it is"), "the question offers the image where it is");
+    check(has("images/mhfu.iso") && has("\n\nData folder:\ndata/MHFU"), "the question ends with both paths");
+    info.size_bytes = 1'950'000'000u;
+    check(storage_question("a.iso", info, "d").find("(recommended, 2.0 GB)") != std::string::npos,
+        "the size rounds to a tenth of a gigabyte");
+}
+
 void prepare_image(const std::string &path) {
     mhfu::IsoImage image(path);
     const auto entry = image.find(mhfu::install::kExecutablePathOnDisc);
@@ -82,6 +103,7 @@ void prepare_image(const std::string &path) {
 int main(int argc, char **argv) {
     identities();
     rejects_unknown_executable();
+    storage_question_text();
     if (argc == 2) prepare_image(argv[1]);
     if (failures != 0) return 1;
     std::cout << "install identity tests passed\n";
