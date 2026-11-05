@@ -57,4 +57,46 @@ const std::vector<File> *served(const psprecomp::GuestMemory &memory) {
     return files ? &*files : nullptr;
 }
 
+namespace {
+
+struct OptionWatch {
+    bool pending{};
+    std::uint32_t buffer{};
+    std::uint32_t frames{};
+};
+
+OptionWatch &watch() {
+    static OptionWatch w;
+    return w;
+}
+
+// Thirty seconds of frames at most: the game copies the options within a few.
+constexpr std::uint32_t kWaitFrames = 30u * 60u;
+
+} // namespace
+
+void save_loaded(std::uint32_t buffer) {
+    watch() = {true, buffer, 0u};
+}
+
+void option_frame(psprecomp::GuestMemory &memory) {
+    OptionWatch &w = watch();
+    if (!w.pending) return;
+    if (!option_wanted() || served(memory) == nullptr) {
+        w.pending = false;
+        return;
+    }
+    switch (turn_option_on(memory, w.buffer)) {
+    case OptionStep::Waiting:
+        if (++w.frames >= kWaitFrames) w.pending = false;
+        return;
+    case OptionStep::TurnedOn:
+        std::cout << "[install] Data Install option turned on: the install is served" << std::endl;
+        break;
+    case OptionStep::Unchanged:
+        break;
+    }
+    w.pending = false;
+}
+
 } // namespace mhfu::game::install_data

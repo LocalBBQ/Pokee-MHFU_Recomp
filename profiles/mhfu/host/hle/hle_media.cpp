@@ -16,6 +16,7 @@
 #include "game/gather_icon.hpp"
 #include "game/guest_layout.hpp"
 #include "game/guest_ram.hpp"
+#include "game/install_data.hpp"
 #include "game/hit_trace.hpp"
 #include "game/button_glyphs.hpp"
 #include "game/item_atlas.hpp"
@@ -406,6 +407,7 @@ void present_frame(Runtime &rt) {
     game::item_sets::frame(rt);
     game::pouch_page::frame(rt);
     game::backpack::frame(rt);
+    game::install_data::option_frame(rt.memory());
     // The stores' lists, as the knives and the Lg Backpack have just said.
     {
         game::GuestRam ram(rt.memory());
