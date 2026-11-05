@@ -139,6 +139,13 @@ std::uint32_t lobby_text_block(const Ram &ram) {
     return 0u;
 }
 
+std::vector<std::uint16_t> with_item(std::vector<std::uint16_t> ids) {
+    auto at = std::find(ids.begin(), ids.end(), kTemplateItem);
+    if (at == ids.end()) at = std::find(ids.begin(), ids.end(), kOrganizerGuide);
+    ids.insert(at == ids.end() ? ids.end() : at + 1, kItem);
+    return ids;
+}
+
 std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free) {
     struct Table {
         std::uint32_t address;
@@ -171,14 +178,32 @@ std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free) {
                 if (ram.load32(pointer_at) != table.lists[i]) ram.store32(pointer_at, table.lists[i]);
                 continue;
             }
-            ram.store16(copies[i], kItem);
-            for (std::size_t j = 0; j < lists[i].size(); ++j)
-                ram.store16(copies[i] + static_cast<std::uint32_t>(j + 1u) * 2u, lists[i][j]);
-            ram.store16(copies[i] + static_cast<std::uint32_t>(lists[i].size() + 1u) * 2u, 0xFFFFu);
+            const std::vector<std::uint16_t> ids = with_item(lists[i]);
+            for (std::size_t j = 0; j < ids.size(); ++j)
+                ram.store16(copies[i] + static_cast<std::uint32_t>(j) * 2u, ids[j]);
+            ram.store16(copies[i] + static_cast<std::uint32_t>(ids.size()) * 2u, 0xFFFFu);
             if (ram.load32(pointer_at) != copies[i]) ram.store32(pointer_at, copies[i]);
         }
     }
     return free;
+}
+
+bool grey_out(Ram &ram, std::uint32_t store) {
+    if (store == 0u || !ram.contains(store, kStoreRow + kMostRows * kRowBytes)) return false;
+    const std::uint32_t rows = ram.load32(store + kStoreRows);
+    if (ram.load8(store + kStoreMode) != 0u || rows > kMostRows) return false;
+    for (std::uint32_t i = 0; i < rows; ++i) {
+        const std::uint32_t row = store + kStoreRow + i * kRowBytes;
+        if (ram.load16(row + kRowItem) == kItem) ram.store16(row + kRowGreyed, 1u);
+    }
+    return true;
+}
+
+bool village_store_talk(const Ram &ram, std::uint32_t talk) {
+    if (!layout::in_ram(talk) || !ram.contains(talk, kTalkType + 1u) || ram.load8(talk + kTalkType) != kVillageStore)
+        return false;
+    const std::uint32_t record = ram.load32(talk + kTalkRecord);
+    return layout::in_ram(record) && ram.contains(record, 4u) && ram.load32(record) == kVillageStore;
 }
 
 std::uint32_t held(const Ram &ram, const Places &places) {
@@ -234,8 +259,15 @@ struct State {
     // How many of the item the hunter had, to tell a purchase.
     std::string hunter;
     std::optional<std::uint32_t> had;
+    // The store the list last asked about the item, to grey it out once bought.
+    std::uint32_t store{};
+    // The shopkeeper has news of the item, and the talk that is telling it.
+    bool news{};
+    std::uint32_t news_talk{};
     psprecomp::Runtime::RecompiledFunction guide_check{};
     psprecomp::Runtime::RecompiledFunction obtained_check{};
+    psprecomp::Runtime::RecompiledFunction store_lines{};
+    psprecomp::Runtime::RecompiledFunction talk_text{};
 };
 
 State &state() {
@@ -251,6 +283,7 @@ void answer(psprecomp::AllegrexContext &ctx, std::uint32_t value) {
 // 0x09A80230(store, item): a Guide. The list asks for each item it shows.
 void guide_check(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     if ((ctx.gpr[5] & 0xFFFFu) == kItem && ctx.gpr[31] == kListGuideReturn && pouch_page::enabled()) {
+        state().store = ctx.gpr[4];
         answer(ctx, 1u);
         return;
     }
@@ -266,6 +299,45 @@ void obtained_check(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx
     }
     ctx.pc = kObtainedCheck;
     state().obtained_check(runtime, ctx);
+}
+
+// 0x09A98F20(talk, npc, check): the village store's news. Checked, the NPC
+// shows it has some while the shopkeeper has news of the item.
+void store_lines(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    const std::uint32_t npc = ctx.gpr[5];
+    if (ctx.gpr[6] != 0u && state().news && pouch_page::enabled() && layout::in_ram(npc) &&
+        runtime.memory().contains(npc + kNpcNews, 1u))
+        runtime.memory().store8(npc + kNpcNews, 1u);
+    ctx.pc = kStoreLines;
+    state().store_lines(runtime, ctx);
+}
+
+// 0x09A9F520(talk, line): a line's text. The village store's greeting, said
+// when it has no news of its own, is the item's news the first time; the
+// talk that began with it keeps it until another begins.
+void talk_text(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
+    State &s = state();
+    const std::uint32_t talk = ctx.gpr[4];
+    if ((ctx.gpr[5] & 0xFFFFu) == kGreeting && pouch_page::enabled()) {
+        GuestRam ram(runtime.memory());
+        if (village_store_talk(ram, talk)) {
+            const auto shown = static_cast<std::int32_t>(ram.load32(talk + kTalkShown));
+            if (shown == 0 || shown == 1) { // the talk's first frame
+                s.news_talk = s.news ? talk : 0u;
+                if (s.news) {
+                    pouch_page::announce();
+                    s.news = false;
+                    if (s.trace) std::cout << "[pouch page] the shopkeeper tells of the Lg Backpack" << std::endl;
+                }
+            }
+            if (s.news_talk == talk) {
+                answer(ctx, kNewsText);
+                return;
+            }
+        }
+    }
+    ctx.pc = kTalkText;
+    s.talk_text(runtime, ctx);
 }
 
 } // namespace
@@ -288,6 +360,7 @@ void frame(psprecomp::Runtime &runtime) {
         write_text(ram, kBuyText, kBuyLineText);
         write_text(ram, kBuyToBoxText, kBuyToBoxLineText);
         write_text(ram, kBuyFullText, kBuyFullLineText);
+        write_text(ram, kNewsText, kNewsLineText);
     }
     point_entry(ram, kTextBlock, kNameTable, kItem, kNameText, s.name);
     point_entry(ram, kTextBlock, kDescriptionTable, kItem, kDescriptionText, s.description);
@@ -314,16 +387,24 @@ void frame(psprecomp::Runtime &runtime) {
         take(ram, places, bought);
         refund(ram, sys, bought - 1u);
         pouch_page::grant(runtime);
-        if (s.trace) std::cout << "[pouch page] Backpack Lg. bought: the fourth page is the hunter's" << std::endl;
+        const bool greyed = grey_out(ram, s.store);
+        if (s.trace)
+            std::cout << "[pouch page] Lg Backpack bought: the fourth page is the hunter's"
+                      << (greyed ? "" : "; no store list to grey it out in") << std::endl;
     }
     s.had = held(ram, places);
 
     if (!lobby) return;
     if (offered != s.offered && s.trace)
-        std::cout << "[pouch page] Backpack Lg. " << (offered ? "in stock" : "not on offer") << std::endl;
+        std::cout << "[pouch page] Lg Backpack " << (offered ? "in stock" : "not on offer") << std::endl;
     s.offered = offered;
+    s.news = offered && !pouch_page::announced();
     if (runtime.function_at(kGuideCheck) != nullptr && runtime.function_at(kGuideCheck) != &guide_check)
         (void)hooks::wrap(runtime, kGuideCheck, &guide_check, s.guide_check, "mhfu_backpack_guide");
+    if (runtime.function_at(kStoreLines) != nullptr && runtime.function_at(kStoreLines) != &store_lines)
+        (void)hooks::wrap(runtime, kStoreLines, &store_lines, s.store_lines, "mhfu_backpack_store_lines");
+    if (runtime.function_at(kTalkText) != nullptr && runtime.function_at(kTalkText) != &talk_text)
+        (void)hooks::wrap(runtime, kTalkText, &talk_text, s.talk_text, "mhfu_backpack_talk_text");
     // Listed from High Rank on, greyed out once bought, as the Guides are.
     offer_stock(ram, unlocked, kStockCopies);
     const std::uint32_t block = lobby_text_block(ram);

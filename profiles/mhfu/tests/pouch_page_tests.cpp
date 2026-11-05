@@ -294,7 +294,9 @@ void test_store(const std::filesystem::path &dir) {
         page.slots[0][1] = {12u, 3u};
         page.slots[2][7] = {65535u, 99u};
         store.set("Ann Lee", page);
-        store.set("Bo", HunterPage{});
+        HunterPage told;
+        told.announced = true;
+        store.set("Bo", told);
         page.slots[1][0] = {4u, 4u};
         store.set("Ann Lee", page);
         check(store.save(), "the pages file was not written");
@@ -304,7 +306,9 @@ void test_store(const std::filesystem::path &dir) {
     check(ann.owned && ann.slots[0][1] == Slot{12u, 3u} && ann.slots[1][0] == Slot{4u, 4u} &&
             ann.slots[2][7] == Slot{65535u, 99u},
         "a page did not come back from the file");
-    check(!again.page("Bo").owned, "a hunter without the page came back with it");
+    check(!ann.announced, "a hunter not told of the Lg Backpack came back told");
+    check(!again.page("Bo").owned && again.page("Bo").announced,
+        "a hunter told of the Lg Backpack, without the page, did not come back so");
     {
         std::ofstream out(path, std::ios::app);
         out << "stray line\nhunter Cy\nowned\npouch 1:2 bad 99999999:1 3:4\n";
@@ -383,6 +387,14 @@ void test_runtime(const std::filesystem::path &dir) {
     set_hunter(memory, u"Bo");
     frame(runtime);
     check(!active() && !runtime.site_hooks_active(), "another hunter kept Ann's page");
+    // Told of the Lg Backpack without the page: kept when the game saves.
+    check(!announced(), "a hunter not told of the Lg Backpack was");
+    announce();
+    check(announced(), "announce() did not tell the hunter");
+    game_saved(memory);
+    Store told(dir / "pouch_page.txt");
+    check(told.page("Bo").announced && !told.page("Bo").owned && told.page("Ann").owned,
+        "the save did not keep that a hunter without the page was told");
     set_hunter(memory, u"Ann");
     frame(runtime);
     check(active() && memory.load32(kPouch + 26u * 4u) == slot_word(77u, 2u), "Ann's page did not come back");

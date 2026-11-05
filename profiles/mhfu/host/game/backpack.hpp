@@ -1,13 +1,14 @@
 #pragma once
 
-// Backpack Lg.: the item that gives the fourth pouch page (game/pouch_page.hpp).
+// Lg Backpack: the item that gives the fourth pouch page (game/pouch_page.hpp).
 // Once the hunter reaches High Rank, in the Guild (HR 4) or in the village
 // (the Village Chief's 7★ quests), the village General Store and the Guild
-// Hall's store sell it for 100,000z, and the shopkeeper's line says that it
-// just came in. Bought, it is taken back out of the pouch or the box and the
-// hunter owns the page, kept when the game next saves; the stores then show
-// it greyed out, as the Guides they sell. Off with the page
-// (MHFU_POUCH_PAGE=0).
+// Hall's store sell it for 100,000z, next to the Backpacker Guide, and the
+// shopkeeper's line says that it just came in. The village shopkeeper has
+// news of it, once, as she has of her other new stock. Bought, it is taken
+// back out of the pouch or the box and the hunter owns the page, kept when
+// the game next saves; the store greys it out at once, as the Guides it
+// sells. Off with the page (MHFU_POUCH_PAGE=0).
 //
 // Read off the USA executable (ULUS-10391) and lobby_task, and checked on a
 // save at HR 9 with every village level open against a new hunter:
@@ -36,7 +37,10 @@
 //   0x09A7FD50 picks by the store's type: the village store (type 1) by
 //   village progress from the eight lists at 0x09B070A8, the Guild Hall's
 //   (type 4) by GameSys + 0x44BD from the five at 0x09B070D0. While the item
-//   is offered, those pointers are a copy of each list with the item first.
+//   is offered, those pointers are a copy of each list with the item after
+//   the Backpacker Guide (830), else the Organizer Guide (829), else last:
+//   the village's later lists have both, its earlier ones the Organizer
+//   Guide alone, the Guild Hall's neither.
 // - The store's line is a text of lobby_task's: table 0 of the text block
 //   that 0x09A7B7D8 finds as resource 4 in the list at *(0x09A0B680) +
 //   0x83C030 (512 entries of 12 bytes: the id, then the block). 491 is what
@@ -54,6 +58,20 @@
 //   it is offered. Zenny is the u32 at GameSys + 0x696F0; the box is 1000
 //   slots at GameSys + 0x3428. Bought more than once, the extra items are
 //   paid back.
+// - The list (0x09A7F038) is rows of 16 bytes from store + 0x6C, as many as
+//   the word at + 0x48: the price, the name, the halfword greyed out at + 8
+//   and the item at + 0xC; the byte at + 0x24 is 0 when buying. It is built
+//   when the store opens, so once bought the item's row is greyed out by
+//   hand, in the store the list's Guide check last asked about.
+// - A talk (lobby_task 0x09A95D08) takes the NPC's type from + 0x480 into
+//   + 0x3B and asks the type's lines (0x09A95D90) for its line at + 0x3C. The
+//   village store's (type 1, 0x09A98F20(talk, npc, check)) are its news, once
+//   per stage of village progress, else 0, its greeting. Checking, when the
+//   village is entered, news sets the NPC's byte at + 0x484, which shows it
+//   has some. A line's text is 0x09A9F520(talk, line), from the record of
+//   the type at + 0x2C; the talk counts the characters shown at + 0x34, from
+//   0, -1 once all are. Both are called from other units, so the news is the
+//   store's greeting, the first time it is said once the item is offered.
 
 #include "game/guest_ram.hpp"
 
@@ -62,6 +80,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace psprecomp {
 class Runtime;
@@ -71,6 +90,7 @@ namespace mhfu::game::backpack {
 
 inline constexpr std::uint16_t kItem = 929u;
 inline constexpr std::uint16_t kTemplateItem = 830u; // the Backpacker Guide
+inline constexpr std::uint16_t kOrganizerGuide = 829u;
 inline constexpr std::uint32_t kPrice = 100000u;
 inline constexpr std::uint32_t kMostZenny = 99999999u;
 
@@ -89,6 +109,25 @@ inline constexpr std::uint32_t kSavedPouch = 0x43C8u;
 inline constexpr std::uint32_t kGuideCheck = 0x09A80230u;
 inline constexpr std::uint32_t kListGuideReturn = 0x09A7F254u;
 inline constexpr std::uint32_t kObtainedCheck = 0x0885C5CCu;
+
+// The store's list.
+inline constexpr std::uint32_t kStoreMode = 0x24u;
+inline constexpr std::uint32_t kStoreRows = 0x48u;
+inline constexpr std::uint32_t kStoreRow = 0x6Cu;
+inline constexpr std::uint32_t kRowBytes = 16u;
+inline constexpr std::uint32_t kRowGreyed = 8u;
+inline constexpr std::uint32_t kRowItem = 0xCu;
+inline constexpr std::uint32_t kMostRows = 0x4EDu;
+
+// The village store's lines, a talk's text, and the talk and NPC fields.
+inline constexpr std::uint32_t kStoreLines = 0x09A98F20u;
+inline constexpr std::uint32_t kTalkText = 0x09A9F520u;
+inline constexpr std::uint32_t kTalkRecord = 0x2Cu;
+inline constexpr std::uint32_t kTalkShown = 0x34u;
+inline constexpr std::uint32_t kTalkType = 0x3Bu;
+inline constexpr std::uint32_t kNpcNews = 0x484u;
+inline constexpr std::uint8_t kVillageStore = 1u;
+inline constexpr std::uint32_t kGreeting = 0u;
 
 // The Chief's 6★ Urgent Quests, and the Urgent Quests after them.
 inline constexpr std::array<std::uint16_t, 2> kSixStarUrgents{10501u, 10509u};
@@ -128,17 +167,21 @@ inline constexpr std::uint32_t kDescriptionText = 0x08803390u;
 inline constexpr std::uint32_t kBuyText = 0x08803400u;
 inline constexpr std::uint32_t kBuyToBoxText = 0x08803480u;
 inline constexpr std::uint32_t kBuyFullText = 0x08803500u;
-inline constexpr std::uint32_t kStockCopies = 0x08803580u;
+inline constexpr std::uint32_t kNewsText = 0x08803580u;
+inline constexpr std::uint32_t kStockCopies = 0x08803640u;
 inline constexpr std::uint32_t kWindowEnd = 0x08803F00u;
 
-inline constexpr std::string_view kName = "Backpack Lg.";
-inline constexpr std::string_view kDescription =
-    "A large backpack. Adds a\nfourth page to your pouch:\n8 more kinds of item.";
+inline constexpr std::string_view kName = "Lg Backpack";
+inline constexpr std::string_view kDescription = "A large backpack. Adds a\nfourth page to your pouch.";
 inline constexpr std::string_view kBuyLineText =
-    "~C00We have a new item in stock!\n~C05Backpack Lg.~C00 will let you\ncarry more items.";
+    "~C00We have a new item in stock!\n~C05Lg Backpack~C00 will let you\ncarry more items.";
 inline constexpr std::string_view kBuyToBoxLineText =
-    "~C00New in stock: ~C05Backpack Lg.~C00,\nto carry more items.\n~C05The item will be automatically\nsent to "
+    "~C00New in stock: ~C05Lg Backpack~C00,\nto carry more items.\n~C05The item will be automatically\nsent to "
     "your Item Box.";
+// As wide as the shopkeeper's own lines: 22 characters, at most 7 lines.
+inline constexpr std::string_view kNewsLineText = "Welcome! We have a new\nitem in stock: the Lg\nBackpack! It "
+                                                  "will let\nyou carry more items,\nwith a fourth page in\nyour "
+                                                  "Item Pouch.";
 inline constexpr std::string_view kBuyFullLineText = "~C00Please select an item to\npurchase. \n~C02Item Bag is full. "
                                                      "(It can\nonly carry 32 types of items.)";
 
@@ -174,11 +217,22 @@ void write_text(Ram &ram, std::uint32_t address, std::string_view text);
 
 // The stock ------------------------------------------------------------------
 
-// Offered: each table's pointers go to copies of their lists with the item
-// first, built from `free`; not offered, back to the game's lists. Only while
-// a table still holds the game's lists or the copies. Returns where the
-// copies end.
+// The list with the item after the Backpacker Guide, else the Organizer
+// Guide, else last.
+[[nodiscard]] std::vector<std::uint16_t> with_item(std::vector<std::uint16_t> ids);
+// Offered: each table's pointers go to copies of their lists with the item,
+// built from `free`; not offered, back to the game's lists. Only while a
+// table still holds the game's lists or the copies. Returns where the copies
+// end.
 std::uint32_t offer_stock(Ram &ram, bool offered, std::uint32_t free);
+// Greys the item's row out in a store's list of things to buy. False when
+// there is no such list at `store`.
+bool grey_out(Ram &ram, std::uint32_t store);
+
+// The news ---------------------------------------------------------------------
+
+// The talk is with the village store.
+[[nodiscard]] bool village_store_talk(const Ram &ram, std::uint32_t talk);
 
 // The purchase -----------------------------------------------------------------
 
