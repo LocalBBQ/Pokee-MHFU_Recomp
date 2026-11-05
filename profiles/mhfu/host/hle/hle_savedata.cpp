@@ -286,6 +286,8 @@ std::uint32_t do_load(psprecomp::GuestMemory &memory, std::uint32_t params, cons
         std::cerr << "[savedata] " << files.file_name << " holds " << data.size() << " bytes; the buffer takes "
                   << capacity << "\n";
     game::pouch_page::game_loaded();
+    if (files.game_name == game::install_data::kSaveGame && files.file_name == game::install_data::kSaveFile)
+        game::install_data::save_loaded(buffer);
     return result::kOk;
 }
 

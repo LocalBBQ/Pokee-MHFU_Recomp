@@ -89,6 +89,32 @@ void test_read() {
     check(read(file, 0u, partial, short_read) == 2u, "a short archive read ends the read");
 }
 
+void test_option() {
+    psprecomp::GuestMemory memory(32u * 1024u * 1024u);
+    constexpr std::uint32_t kBuffer = 0x093BA600u;
+    // The options as a save that never ran Data Install has them, in the
+    // load buffer once the game has unscrambled it.
+    const std::uint8_t options[] = {1, 1, 2, 2, 0, 1, 0};
+    for (std::uint32_t i = 0; i < kOptionBytes; ++i) memory.store8(kBuffer + i, options[i]);
+    memory.store8(kOptions + kOptionBytes, 0x5Au);
+
+    check(turn_option_on(memory, kBuffer) == OptionStep::Waiting, "options the game has not copied are left alone");
+    check(memory.load8(kOptions + kInstallOption) == 0u, "waiting wrote nothing");
+    for (std::uint32_t i = 0; i < kOptionBytes; ++i) memory.store8(kOptions + i, options[i]);
+    check(turn_option_on(memory, kBuffer) == OptionStep::TurnedOn, "copied with the option off, it is turned on");
+    check(memory.load8(kOptions + kInstallOption) == 1u, "the Data Install byte is 1");
+    bool others_kept = memory.load8(kOptions + kOptionBytes) == 0x5Au && memory.load8(kBuffer + kInstallOption) == 0u;
+    for (std::uint32_t i = 0; i < kInstallOption; ++i)
+        others_kept = others_kept && memory.load8(kOptions + i) == options[i];
+    check(others_kept, "only the Data Install byte changes");
+
+    // Already on in the save: compared and left alone.
+    memory.store8(kBuffer + kInstallOption, 1u);
+    check(turn_option_on(memory, kBuffer) == OptionStep::Unchanged, "an option already on is left alone");
+    // A buffer outside memory never matches.
+    check(turn_option_on(memory, 0x10000000u) == OptionStep::Waiting, "a buffer outside memory is left alone");
+}
+
 void test_names() {
     check(file_number("PSP/SAVEDATA/ULUS10391DAT/00000012") == 12u, "a numbered file is recognised");
     check(file_number("psp/savedata/ulus10391dat/00000000") == 0u, "in any case");
@@ -220,6 +246,7 @@ int main(int argc, char **argv) {
     test_pack();
     test_read();
     test_names();
+    test_option();
     test_title_menu();
     std::printf("%d failure(s)\n", failures);
     return failures == 0 ? 0 : 1;

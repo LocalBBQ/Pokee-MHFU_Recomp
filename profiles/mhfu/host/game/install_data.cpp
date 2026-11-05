@@ -1,8 +1,11 @@
 #include "game/install_data.hpp"
 
+#include "psprecomp/guest_memory.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cstdlib>
 
 namespace mhfu::game::install_data {
 namespace {
@@ -59,6 +62,23 @@ std::optional<std::uint32_t> file_number(std::string_view path) {
     const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), number);
     if (ec != std::errc{} || end != digits.data() + digits.size()) return std::nullopt;
     return number;
+}
+
+OptionStep turn_option_on(psprecomp::GuestMemory &memory, std::uint32_t buffer) {
+    if (!memory.contains(kOptions, kOptionBytes) || !memory.contains(buffer, kOptionBytes)) return OptionStep::Waiting;
+    for (std::uint32_t i = 0; i < kOptionBytes; ++i)
+        if (memory.load8(kOptions + i) != memory.load8(buffer + i)) return OptionStep::Waiting;
+    if (memory.load8(kOptions + kInstallOption) != 0u) return OptionStep::Unchanged;
+    memory.store8(kOptions + kInstallOption, 1u);
+    return OptionStep::TurnedOn;
+}
+
+bool option_wanted() {
+    static const bool wanted = [] {
+        const char *text = std::getenv("MHFU_INSTALL_OPTION");
+        return text == nullptr || std::string_view(text) != "0";
+    }();
+    return wanted;
 }
 
 } // namespace mhfu::game::install_data
