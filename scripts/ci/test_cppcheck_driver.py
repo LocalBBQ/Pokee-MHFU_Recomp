@@ -66,7 +66,7 @@ class CppcheckDriverTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             result = cppcheck.main()
         generated = [call for call in generator.call_args_list if call.args[0][0] == 'cmake']
-        self.assertEqual(len(generated), 2)
+        self.assertEqual(len(generated), 3)
         for call in generated:
             self.assertEqual(call.kwargs, {'check': True, 'timeout': 30})
         return result

@@ -38,6 +38,10 @@ def main():
                     f'-DOUTPUT={build / "profiles/mhfu/generated_nids/nid_table.inc"}',
                     '-P', str(ROOT / 'profiles/mhfu/tools/embed_nids.cmake')],
                    check=True, timeout=30)
+    subprocess.run(['cmake', f'-DINPUT={ROOT / "profiles/mhfu/config/site_hooks.txt"}',
+                    f'-DOUTPUT={build / "profiles/mhfu/generated_sites/site_hooks.inc"}',
+                    '-P', str(ROOT / 'profiles/mhfu/tools/embed_text.cmake')],
+                   check=True, timeout=30)
     subprocess.run(['cmake', f'-DSOURCE_DIR={ROOT}',
                     f'-DOUTPUT={build / "profiles/mhfu/generated_version/pokee_version.hpp"}',
                     '-P', str(ROOT / 'profiles/mhfu/tools/write_version.cmake')],

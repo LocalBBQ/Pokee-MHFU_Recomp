@@ -1576,7 +1576,7 @@ if(MHFU_RENDERER_TESTS)
     add_executable(mhfu_renderer_ui_tests tests/renderer_ui_tests.cpp
         ${MHFU_HOST_SOURCES} ${MHFU_RENDERER_SOURCES}
         $<TARGET_OBJECTS:mhfu_generated>)
-    add_dependencies(mhfu_renderer_ui_tests mhfu_shaders mhfu_version)
+    add_dependencies(mhfu_renderer_ui_tests mhfu_shaders mhfu_version mhfu_site_hooks)
     target_sources(mhfu_renderer_ui_tests PRIVATE "${MHFU_NIDS_INC}")
     target_compile_definitions(mhfu_renderer_ui_tests PRIVATE MHFU_HAS_RENDERER=1 MHFU_HAS_SDL_AUDIO=1 MHFU_HAS_SDL=1
         PSPRECOMP_TEST_NIDS_CSV="${PROJECT_SOURCE_DIR}/configs/nids.csv")
@@ -1585,7 +1585,8 @@ if(MHFU_RENDERER_TESTS)
         "${MHFU_PROFILE_DIR}/third_party/imgui"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_shaders"
         "${CMAKE_CURRENT_BINARY_DIR}/generated_version"
-        "${CMAKE_CURRENT_BINARY_DIR}/generated_nids")
+        "${CMAKE_CURRENT_BINARY_DIR}/generated_nids"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated_sites")
     target_link_libraries(mhfu_renderer_ui_tests PRIVATE psprecomp_core SDL3::SDL3 Vulkan::Vulkan Threads::Threads ${CMAKE_DL_LIBS})
     mhfu_use_ffmpeg(mhfu_renderer_ui_tests)
     if(WIN32)
