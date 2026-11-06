@@ -56,6 +56,11 @@ using ProgressFn = std::function<void(const std::string &stage, std::uint64_t do
 // the last byte.
 [[nodiscard]] std::uint64_t space_needed_to_copy(const ImageInfo &info);
 
+// The question asked once the image has passed its checks: copy it into
+// data_dir or use it where it is, with its size and both paths.
+[[nodiscard]] std::string storage_question(
+    const std::filesystem::path &image, const ImageInfo &info, const std::filesystem::path &data_dir);
+
 // Checks the image, stores it according to storage and prepares the
 // executable in data_dir. Nothing in data_dir changes until the image has
 // passed its checks; files are written under temporary names and renamed at

@@ -252,6 +252,7 @@ set(MHFU_HOST_SOURCES
     host/install/front_end.cpp
     host/install/installer.cpp
     host/install/installer_dialogs.cpp
+    host/install/installer_text.cpp
     host/install/user_data.cpp
     host/settings/settings.cpp
     host/mods/file_overlay.cpp
@@ -964,11 +965,12 @@ if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_empty_item_slot_tests COMMAND mhfu_empty_item_slot_tests)
 endif()
 
-# Installer release identities, and preparation of a supported executable when
-# a disc image path is passed. The default run uses no game data.
+# Installer release identities, the question about storing the image, and
+# preparation of a supported executable when a disc image path is passed. The default run uses no game data.
 add_executable(mhfu_install_identity_tests
     tests/install_identity_tests.cpp
     host/install/executable_preparation.cpp
+    host/install/installer_text.cpp
     host/kernel/iso_image.cpp
     host/platform/utf8_path.cpp
     third_party/tiny_aes/aes.c)
