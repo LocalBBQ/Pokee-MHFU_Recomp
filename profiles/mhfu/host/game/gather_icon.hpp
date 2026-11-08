@@ -521,48 +521,82 @@ inline constexpr std::array<std::uint16_t, 4> kBugNets{148u, 149u, 150u, 1226u};
 
 // ○ for every gather the pouch has the tool for (`game.gather_circle`, on by
 // default). The game mines and catches bugs only on □ with a pickaxe or a
-// bug net selected; ○ on such a point goes on to the carve search
-// (gather_targets). With the setting on, ○ new on a mining point or a bug
-// point with that tool in the pouch (gather_tool_slot) is □ in the hunter's
-// words until ○ is let go, and the circle handler is given the tool's slot in
-// place of the selection (gather_slot_for). The selection itself is never
-// changed, so the item bar and the HUD go on showing the item the player
-// chose. A body ○ would carve keeps ○ a carve. At a Pokke Farm outcrop or
-// thicket (farm_point), which takes no tool, ○ is □. Without the tool ○ is
-// left as it is, so it never uses another item. L+○ is the item bar, and a
-// chord (kGatherChord) is an attack: both are left alone.
+// bug net selected. Both buttons reach the same circle handler, game_task
+// 0x09AA6E70, with the button as its second argument, kept in s0: 1 from
+// the ○ dispatcher (0x09AA9630) and 2 from the □ one (0x09AA959C, which
+// then asks the item handler). The handler checks the hunter, asks the
+// gather search 0x09A6F490 once (returning to 0x09AA6EF0) and switches on
+// the kind it wrote at sp+78. Mining (0x09AA6FA4) and a bug net (0x09AA729C)
+// go on only for 2; for 1 the handler goes on to the carve search instead.
+// With 2, once mining or a catch has started, it returns before that search
+// (0x09AA73B4).
 //
-// The circle handler reads the selected slot (hunter +1608) only to pass it
-// to 0x08856884, which returns the slot's address in the pouch (GameSys +
-// 0x6AEA6 + 4 * slot): at 0x09AA6FB8 for mining's tool check, 0x09AA72B0
-// for the net's, and 0x09AA7234 for the id it keeps at hunter +1684 (stored
-// at 0x09AA7248). Every game_task call that takes the tool from the pouch
-// afterwards uses that id.
+// The hunter's buttons are left as the player pressed them. When the search
+// returns to the handler with ○ as its button, a mining or bug point found,
+// that tool in the pouch (gather_tool_slot) and no body ○ would carve, s0
+// becomes 2, and the rest of that one call is the handler's own □ path. Its
+// reads of the selected slot are then given the tool's slot (gather_slot_for).
+// No other code sees a □: the □ dispatcher and the item handler are not run,
+// so ○ never uses the selected item, and the selection itself never changes,
+// so the item bar and the HUD go on showing the item the player chose.
+// Without the tool, with the setting off, or with the handler's code
+// different, ○ is the game's ○.
+//
+// The handler reads the selected slot (hunter +1608) only to pass it to
+// 0x08856884, which returns the slot's address in the pouch (GameSys +
+// 0x6AEA6 + 4 * slot): at 0x09AA6FB8 for mining's tool check and 0x09AA7234
+// for the pickaxe it keeps at hunter +1684 (stored at 0x09AA7248), and at
+// 0x09AA72B0 for the net's check and 0x09AA732C for the net it keeps (stored
+// at 0x09AA7340, before bug action 82 starts). Every game_task call that takes
+// the tool from the pouch afterwards uses that id. Every call from inside the
+// handler is given the tool's slot, not a list of them, so a read missed in
+// such a list cannot start the action with the selected item.
+//
+// The Pokke Farm's handler (farm_point) tests □ inline in the hunter's words
+// and has no such call, and an outcrop or thicket takes no tool: there a new
+// ○ is □ in the hunter's words until ○ is let go. L+○ is the item bar and a
+// chord (kGatherChord) an attack, and both are left alone.
+
+// The tool's slot when the circle handler, asked with `button` (its s0) for
+// `hunter` (its s2), is to take the gather the search found, of `kind`, as □:
+// ○, mining or a bug net, the local hunter, the tool in the pouch, no body ○
+// would carve, and Gather with ○ on. Nothing otherwise.
+[[nodiscard]] std::optional<std::uint16_t> circle_gather(
+    const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t button, std::uint16_t kind);
+
+// The handler's gather search has returned `id` and `kind`. Makes `button` the
+// handler's □ and readies gather_slot_for when circle_gather gives a slot; an
+// id of 0xFFFF is no gather. Either way it ends what an earlier search readied.
+void gather_handler_searched(const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t &button,
+    std::uint16_t id, std::uint16_t kind);
 
 // Both settings on one frame of the local hunter's words, as the copy has just
 // written them: the hold (GatherRepeat) on the point, body or farm spot in
-// reach, then Gather with ○. `hunter` is the one the copy wrote; any other
-// than the one the camera follows is left alone. A press turned into □ for a
-// tool also readies gather_slot_for until the next frame.
+// reach, then the farm's ○. `hunter` is the one the copy wrote; any other than
+// the one the camera follows is left alone. A new frame also ends what the
+// handler's last search readied.
 void gather_input(HunterButtons &buttons, std::uint32_t hunter, psprecomp::GuestMemory &memory);
 
-// The slot 0x08856884 is asked for in place of the selection: the tool's, on
-// the frame ○ became □ for it, when `return_address` is one of the circle
-// handler's three calls and `hunter` (its s2) is the one the press was for.
-// Nothing otherwise, and the game's own slot is used.
+// The slot 0x08856884 is asked for in place of the selection: the tool's,
+// while the circle handler takes ○ as □ (gather_handler_searched), when
+// `return_address` is inside the handler (0x09AA6E70 to 0x09AA74A8) and
+// `hunter` (its s2) is the one it is for. Nothing otherwise, and the game's
+// own slot is used.
 [[nodiscard]] std::optional<std::uint16_t> gather_slot_for(std::uint32_t return_address, std::uint32_t hunter);
 
-// The instructions behind the copy and its call, behind 0x08856884, and
-// behind the circle handler's reads of the selection (checked as ○ is pressed,
-// since game_task is not always loaded).
+// The instructions behind the copy and its call, behind 0x08856884, behind
+// the handler's reads of the selection, and behind the handler's button, its
+// search and the dispatchers' calls.
 [[nodiscard]] std::span<const GatherWord> gather_input_words();
 [[nodiscard]] std::span<const GatherWord> gather_slot_words();
 [[nodiscard]] std::span<const GatherWord> gather_tool_words();
+[[nodiscard]] std::span<const GatherWord> gather_handler_words();
 
-// Puts the wrappers in place: over the copy (0x088D61CC) once Hold to gather
-// or Gather with ○ is first on, and over 0x08856884 once Gather with ○ is,
-// each after a check of its code; at the flip, when no generated code is
-// running. Both are chained (hooks::wrap), so the game's calls run them inline.
+// Puts the wrappers in place, each after a check of its code: over the copy
+// (0x088D61CC) once Hold to gather or Gather with ○ is first on, and with
+// Gather with ○ over 0x08856884 and then over the gather search, each time
+// game_task is loaded; at the flip, when no generated code is running. All
+// are chained (hooks::wrap), so the game's calls run them inline.
 void gather_frame(psprecomp::Runtime &runtime);
 
 } // namespace mhfu::game
