@@ -1176,10 +1176,21 @@ std::span<const GatherWord> gather_handler_words() {
 
 namespace {
 
-// ○ is new in the hunter's words this frame (the hold presses it again), so
-// a call the game makes without a press is never a gather.
+// The local hunter's frames since ○ was last new in its words.
+std::uint32_t &circle_age() {
+    static std::uint32_t age = kGatherCircleRecent;
+    return age;
+}
+
+// ○ is down in the hunter's words, or was new in them within the last
+// kGatherCircleRecent frames: the game keeps a ○ pressed during an action and
+// asks the handler only once the action ends, when it is no longer new (the
+// hold's next press while mining). A call the game makes with ○ long let go
+// is never a gather.
 bool circle_pressed(const psprecomp::GuestMemory &memory, std::uint32_t hunter) {
-    return in_ram(hunter + kHunterFresh, 4u, memory) && (memory.load32(hunter + kHunterFresh) & kCircleButton) != 0u;
+    if (circle_age() < kGatherCircleRecent) return true;
+    if (!in_ram(hunter + kHunterHeld, kHunterFresh + 4u - kHunterHeld, memory)) return false;
+    return ((memory.load32(hunter + kHunterHeld) | memory.load32(hunter + kHunterFresh)) & kCircleButton) != 0u;
 }
 
 } // namespace
@@ -1206,7 +1217,7 @@ const char *circle_left(const psprecomp::GuestMemory &memory, std::uint32_t hunt
     const std::optional<std::uint32_t> local = local_hunter(memory);
     if (!local) return "no local hunter";
     if (*local != hunter) return "another hunter";
-    if (!circle_pressed(memory, hunter)) return "no new ○";
+    if (!circle_pressed(memory, hunter)) return "○ is not down or just pressed";
     if (carve_in_reach(memory)) return "a body to carve";
     return "no tool in the pouch";
 }
@@ -1226,6 +1237,7 @@ void gather_handler_searched(const psprecomp::GuestMemory &memory, std::uint32_t
     if (!slot) return;
     button = (button & ~0xFFu) | kHandlerSquare;
     handler_tool() = HandlerTool{true, hunter, *slot};
+    circle_age() = kGatherCircleRecent; // that press is taken
     if (trace_on()) std::cout << "[gather] the circle handler takes ○ as □ with the tool in slot " << *slot << std::endl;
 }
 
@@ -1243,6 +1255,9 @@ void gather_input(HunterButtons &buttons, std::uint32_t hunter, psprecomp::Guest
     else repeat.reset();
     if (settings::current().gather_circle) farm_circle(as_square, buttons, memory);
     else as_square = false;
+    std::uint32_t &age = circle_age();
+    if ((buttons.fresh & kCircleButton) != 0u) age = 0u;
+    else if (age < kGatherCircleRecent) ++age;
 }
 
 std::optional<std::uint16_t> gather_slot_for(std::uint32_t return_address, std::uint32_t hunter) {
