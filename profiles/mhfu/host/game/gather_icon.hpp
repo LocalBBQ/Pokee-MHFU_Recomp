@@ -318,6 +318,11 @@ inline constexpr std::uint32_t kPadButtons = 0xFFFFu;
 // the pulse the hold used to send on the pad (three reads down, three up).
 inline constexpr unsigned kGatherPressFrames = 6u;
 
+// How many of the hunter's frames after a new ○ the circle handler may still
+// take it as a gather (one second): the game asks the handler once the
+// action the press came during has ended.
+inline constexpr std::uint32_t kGatherCircleRecent = 30u;
+
 // △ and ×. With ○ they make the weapons' chords (△+○ is an attack, a draw
 // attack with the weapon away), which the game reads on the same press, so
 // one down when a hold would start leaves the press to the game. R is no
@@ -534,8 +539,8 @@ inline constexpr std::array<std::uint16_t, 4> kBugNets{148u, 149u, 150u, 1226u};
 // (0x09AA73B4).
 //
 // The hunter's buttons are left as the player pressed them. When the search
-// returns to the handler with ○ (0 or 1) as its button and a new ○ in the
-// hunter's words, a mining or bug point found,
+// returns to the handler with ○ (0 or 1) as its button and ○ down or just
+// pressed (kGatherCircleRecent), a mining or bug point found,
 // that tool in the pouch (gather_tool_slot) and no body ○ would carve, s0
 // becomes 2, and the rest of that one call is the handler's own □ path. Its
 // reads of the selected slot are then given the tool's slot (gather_slot_for).
@@ -562,7 +567,8 @@ inline constexpr std::array<std::uint16_t, 4> kBugNets{148u, 149u, 150u, 1226u};
 
 // The tool's slot when the circle handler, asked with `button` (its s0) for
 // `hunter` (its s2), is to take the gather the search found, of `kind`, as □:
-// ○ (0 or 1) with ○ new in the hunter's words, mining or a bug net, the local
+// ○ (0 or 1) with ○ down in the hunter's words or new in them within
+// kGatherCircleRecent frames, mining or a bug net, the local
 // hunter, the tool in the pouch, no body ○ would carve, and Gather with ○ on.
 // Nothing otherwise.
 [[nodiscard]] std::optional<std::uint16_t> circle_gather(

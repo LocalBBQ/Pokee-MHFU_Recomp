@@ -782,7 +782,15 @@ void test_gathering_with_circle() {
     const HunterButtons mine = pressed(kCircle);
     check(mine.held == kCircle && mine.fresh == kCircle && !gather_slot_for(kMiningCheck, hunter),
         "the hunter's words stay ○: no □ reaches the □ dispatcher or the item handler");
-    check(!circle_gather(memory, hunter, kHandlerCircle, 3u), "a call with no new ○ in the words is the game's");
+    check(circle_gather(memory, hunter, kHandlerCircle, 3u) == std::optional<std::uint16_t>{3u},
+        "the press is the handler's while the hunter acts: the game asks once the action ends");
+    for (std::uint32_t frame = 1u; frame < kGatherCircleRecent; ++frame) (void)input(0u);
+    check(circle_gather(memory, hunter, kHandlerCircle, 3u).has_value(), "for up to a second");
+    (void)input(0u);
+    check(!circle_gather(memory, hunter, kHandlerCircle, 3u), "but a call with ○ long let go is the game's");
+    memory.store32(hunter + kHunterHeld, kCircle);
+    check(circle_gather(memory, hunter, kHandlerCircle, 3u).has_value(), "○ held down is a press, as in a hold");
+    memory.store32(hunter + kHunterHeld, 0u);
     memory.store32(hunter + kHunterFresh, kCircle); // as the copy writes it
     check(circle_gather(memory, hunter, kHandlerCircle, 3u) == std::optional<std::uint16_t>{3u},
         "with a pickaxe, the handler asked with ○ takes the pickaxe's slot");
@@ -1033,8 +1041,10 @@ void test_wrappers() {
         "the item bar reads the potion, and the selection never moved");
     (void)copy({kCircle, 0u, 0u, kPushed});
     check(slot(0x09AA6FC0u) == pouch, "the next frame the handler reads the selection again");
+    (void)copy({0u, 0u, kCircle, kPushed});
+    for (std::uint32_t frame = 0u; frame < kGatherCircleRecent; ++frame) (void)copy({0u, 0u, 0u, kPushed});
     check(search(0u, 3u) == 0u && search(1u, 3u) == 1u && slot(0x09AA6FC0u) == pouch,
-        "with no new ○ in the words, a call to the handler is the game's");
+        "with ○ let go for a second, a call to the handler is the game's");
     (void)copy({kCircle, kCircle, 0u, kPushed});
     check(search(2u, 3u) == 2u && slot(0x09AA6FC0u) == pouch, "asked with □ the handler is the game's");
     check(search(1u, 0u) == 1u, "a plant leaves ○");
