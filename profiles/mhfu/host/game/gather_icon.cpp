@@ -981,17 +981,20 @@ constexpr GatherWord kSlotWords[] = {
 };
 
 // The circle handler, game_task 0x09AA6E70: a0 the hunter, kept in s2, and
-// a1 the button, kept in s0: 1 from the ○ dispatcher, 2 from the □ one. It
-// asks the gather search once, past its own checks of the hunter, and switches
-// on the kind the search wrote on its stack. Mining and a bug net go on only
-// for 2; with 1 the handler goes to the carve search. After it has started
+// a1 the button, kept in s0. Its callers pass 2 for □ (0x09AA959C and
+// 0x09AA5C04) and 1 or 0 for ○: 1 from the ○ dispatcher (0x09AA9630), 0 from
+// the ○ of another hunter state (0x09AA5484), the one a ○ at a fishing spot
+// leaves the hunter in. The handler only ever asks whether it is 2. It asks
+// the gather search once, past its own checks of the hunter, and switches on
+// the kind the search wrote on its stack. Mining and a bug net go on only for
+// 2; otherwise the handler goes to the carve search. After it has started
 // one, 2 returns before that search.
 constexpr std::uint32_t kGatherSearch = 0x09A6F490u;
 constexpr std::uint32_t kHandlerSearchReturn = 0x09AA6EF0u;
 constexpr std::uint32_t kHandlerStart = 0x09AA6E70u;
 constexpr std::uint32_t kHandlerEnd = 0x09AA74A8u;
 constexpr std::uint32_t kHandlerKind = 78u; // on the handler's stack
-constexpr std::uint32_t kHandlerCircle = 1u;
+constexpr std::uint32_t kHandlerCircle = 1u; // 0 is ○ as well
 constexpr std::uint32_t kHandlerSquare = 2u;
 constexpr GatherWord kHandlerWords[] = {
     {0x09A6F490u, 0x27BDFFF0u}, // addiu sp,sp,-16: the gather search
@@ -1140,7 +1143,15 @@ void gather_search(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx)
 
 // The circle handler's reads of the selection, while it takes ○ as □.
 void pouch_slot(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
-    if (const std::optional<std::uint16_t> slot = gather_slot_for(ctx.gpr[31], ctx.gpr[18])) ctx.gpr[5] = *slot;
+    if (const std::optional<std::uint16_t> slot = gather_slot_for(ctx.gpr[31], ctx.gpr[18])) {
+        if (trace_on())
+            std::cout << "[gather] slot " << *slot << " in place of " << (ctx.gpr[5] & 0xFFFFu) << " for 0x"
+                      << std::hex << ctx.gpr[31] << std::dec << std::endl;
+        ctx.gpr[5] = *slot;
+    } else if (trace_on() && ctx.gpr[31] >= kHandlerStart && ctx.gpr[31] < kHandlerEnd) {
+        std::cout << "[gather] the handler reads slot " << (ctx.gpr[5] & 0xFFFFu) << " for 0x" << std::hex
+                  << ctx.gpr[31] << std::dec << std::endl;
+    }
     ctx.pc = kPouchSlot;
     slot_next(runtime, ctx);
 }
@@ -1163,20 +1174,55 @@ std::span<const GatherWord> gather_handler_words() {
     return kHandlerWords;
 }
 
+namespace {
+
+// ○ is new in the hunter's words this frame (the hold presses it again), so
+// a call the game makes without a press is never a gather.
+bool circle_pressed(const psprecomp::GuestMemory &memory, std::uint32_t hunter) {
+    return in_ram(hunter + kHunterFresh, 4u, memory) && (memory.load32(hunter + kHunterFresh) & kCircleButton) != 0u;
+}
+
+} // namespace
+
 std::optional<std::uint16_t> circle_gather(
     const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t button, std::uint16_t kind) {
-    if (!settings::current().gather_circle || (button & 0xFFu) != kHandlerCircle || !gather_uses_square(kind))
+    if (!settings::current().gather_circle || (button & 0xFFu) > kHandlerCircle || !gather_uses_square(kind))
         return std::nullopt;
     const std::optional<std::uint32_t> local = local_hunter(memory);
-    if (!local || *local != hunter || carve_in_reach(memory)) return std::nullopt;
+    if (!local || *local != hunter || !circle_pressed(memory, hunter) || carve_in_reach(memory))
+        return std::nullopt;
     return gather_tool_slot(memory, kind);
 }
+
+namespace {
+
+// Why the handler's ○ stays ○, for the trace.
+const char *circle_left(const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t button,
+    std::uint16_t id, std::uint16_t kind) {
+    if (id == 0xFFFFu) return "no point found";
+    if (!settings::current().gather_circle) return "the setting is off";
+    if ((button & 0xFFu) > kHandlerCircle) return "the button is □";
+    if (!gather_uses_square(kind)) return "the point takes ○ already";
+    const std::optional<std::uint32_t> local = local_hunter(memory);
+    if (!local) return "no local hunter";
+    if (*local != hunter) return "another hunter";
+    if (!circle_pressed(memory, hunter)) return "no new ○";
+    if (carve_in_reach(memory)) return "a body to carve";
+    return "no tool in the pouch";
+}
+
+} // namespace
 
 void gather_handler_searched(const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t &button,
     std::uint16_t id, std::uint16_t kind) {
     handler_tool() = {};
-    if (id == 0xFFFFu) return;
-    const std::optional<std::uint16_t> slot = circle_gather(memory, hunter, button, kind);
+    const std::optional<std::uint16_t> slot =
+        id == 0xFFFFu ? std::nullopt : circle_gather(memory, hunter, button, kind);
+    if (trace_on())
+        std::cout << "[gather] the circle handler searched: button " << (button & 0xFFu) << ", point 0x" << std::hex
+                  << id << std::dec << ", kind " << kind << ", hunter 0x" << std::hex << hunter << std::dec
+                  << (slot ? "" : ", left: ") << (slot ? "" : circle_left(memory, hunter, button, id, kind))
+                  << std::endl;
     if (!slot) return;
     button = (button & ~0xFFu) | kHandlerSquare;
     handler_tool() = HandlerTool{true, hunter, *slot};

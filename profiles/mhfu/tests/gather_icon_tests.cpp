@@ -577,6 +577,7 @@ void test_holding_on_a_point() {
     check(presses(kGatherPressFrames, kCircle, [&] { return input(kCircle); }) ==
             expected_presses(kGatherPressFrames, 1u),
         "the presses keep going as ○");
+    memory.store32(hunter + kHunterFresh, kCircle); // as the copy writes it
     std::uint32_t button = 1u;
     gather_handler_searched(memory, hunter, button, 7u, 3u);
     check(button == 2u && gather_slot_for(0x09AA6FC0u, hunter) == std::optional<std::uint16_t>{2u},
@@ -781,8 +782,12 @@ void test_gathering_with_circle() {
     const HunterButtons mine = pressed(kCircle);
     check(mine.held == kCircle && mine.fresh == kCircle && !gather_slot_for(kMiningCheck, hunter),
         "the hunter's words stay ○: no □ reaches the □ dispatcher or the item handler");
+    check(!circle_gather(memory, hunter, kHandlerCircle, 3u), "a call with no new ○ in the words is the game's");
+    memory.store32(hunter + kHunterFresh, kCircle); // as the copy writes it
     check(circle_gather(memory, hunter, kHandlerCircle, 3u) == std::optional<std::uint16_t>{3u},
         "with a pickaxe, the handler asked with ○ takes the pickaxe's slot");
+    check(circle_gather(memory, hunter, 0u, 3u) == std::optional<std::uint16_t>{3u},
+        "and so does ○ from the hunter state a fishing spot's ○ leaves, which passes 0");
     check(!circle_gather(memory, hunter, kHandlerSquare, 3u), "asked with □ it is the game's own");
     check(!circle_gather(memory, hunter, kHandlerCircle, 0u), "and so is a plant");
     check(!circle_gather(memory, 0x09780000u, kHandlerCircle, 3u), "and another hunter");
@@ -809,6 +814,9 @@ void test_gathering_with_circle() {
     check(none == kHandlerCircle && !gather_slot_for(kMiningCheck, hunter),
         "so does a search that finds nothing, which leaves ○ alone");
     check(searched(0x00012301u, 3u) == 0x00012302u, "only the low byte the handler tests becomes □");
+    check(searched(0u, 3u) == kHandlerSquare && gather_slot_for(kKeptTool, hunter) == std::optional<std::uint16_t>{3u},
+        "a 0 for ○ is taken as □ with the pickaxe too");
+    check(searched(3u, 3u) == 3u, "a button the handler is never given is left alone");
     (void)searched(kHandlerCircle, 0u);
     check(!gather_slot_for(kMiningCheck, hunter), "and a later search for a plant ends it");
 
@@ -1018,12 +1026,16 @@ void test_wrappers() {
         "○ on the mining point stays ○ in the hunter's words");
     check(slot(0x09AA6FC0u) == pouch, "and readies no slot by itself");
     check(search(1u, 3u) == 2u, "the handler's search, asked with ○, leaves its button □");
+    check(search(0u, 3u) == 2u, "and so does one asked with 0, the ○ of another hunter state");
     check(slot(0x09AA6FC0u) == pouch + 12u && slot(0x09AA723Cu) == pouch + 12u && slot(0x09AA7334u) == pouch + 12u,
         "and the handler then reads the pickaxe's slot");
     check(slot(0x0883FD28u) == pouch && memory.load16(hunter + 1608u) == 0u,
         "the item bar reads the potion, and the selection never moved");
     (void)copy({kCircle, 0u, 0u, kPushed});
     check(slot(0x09AA6FC0u) == pouch, "the next frame the handler reads the selection again");
+    check(search(0u, 3u) == 0u && search(1u, 3u) == 1u && slot(0x09AA6FC0u) == pouch,
+        "with no new ○ in the words, a call to the handler is the game's");
+    (void)copy({kCircle, kCircle, 0u, kPushed});
     check(search(2u, 3u) == 2u && slot(0x09AA6FC0u) == pouch, "asked with □ the handler is the game's");
     check(search(1u, 0u) == 1u, "a plant leaves ○");
     check(search(1u, 3u, 0x09A70000u) == 1u && slot(0x09AA6FC0u) == pouch, "a search for another caller is left alone");
