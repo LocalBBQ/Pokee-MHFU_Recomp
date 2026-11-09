@@ -522,17 +522,20 @@ inline constexpr std::array<std::uint16_t, 4> kBugNets{148u, 149u, 150u, 1226u};
 // ○ for every gather the pouch has the tool for (`game.gather_circle`, on by
 // default). The game mines and catches bugs only on □ with a pickaxe or a
 // bug net selected. Both buttons reach the same circle handler, game_task
-// 0x09AA6E70, with the button as its second argument, kept in s0: 1 from
-// the ○ dispatcher (0x09AA9630) and 2 from the □ one (0x09AA959C, which
-// then asks the item handler). The handler checks the hunter, asks the
+// 0x09AA6E70, with the button as its second argument, kept in s0: 2 for □
+// (0x09AA959C, which then asks the item handler, and 0x09AA5C04), and 1 or 0
+// for ○. The ○ dispatcher (0x09AA9630) passes 1; the ○ of another hunter
+// state (0x09AA5484), which a ○ at a fishing spot leaves the hunter in,
+// passes 0. The handler only tests for 2. The handler checks the hunter, asks the
 // gather search 0x09A6F490 once (returning to 0x09AA6EF0) and switches on
 // the kind it wrote at sp+78. Mining (0x09AA6FA4) and a bug net (0x09AA729C)
-// go on only for 2; for 1 the handler goes on to the carve search instead.
+// go on only for 2; otherwise the handler goes on to the carve search.
 // With 2, once mining or a catch has started, it returns before that search
 // (0x09AA73B4).
 //
 // The hunter's buttons are left as the player pressed them. When the search
-// returns to the handler with ○ as its button, a mining or bug point found,
+// returns to the handler with ○ (0 or 1) as its button and a new ○ in the
+// hunter's words, a mining or bug point found,
 // that tool in the pouch (gather_tool_slot) and no body ○ would carve, s0
 // becomes 2, and the rest of that one call is the handler's own □ path. Its
 // reads of the selected slot are then given the tool's slot (gather_slot_for).
@@ -559,8 +562,9 @@ inline constexpr std::array<std::uint16_t, 4> kBugNets{148u, 149u, 150u, 1226u};
 
 // The tool's slot when the circle handler, asked with `button` (its s0) for
 // `hunter` (its s2), is to take the gather the search found, of `kind`, as □:
-// ○, mining or a bug net, the local hunter, the tool in the pouch, no body ○
-// would carve, and Gather with ○ on. Nothing otherwise.
+// ○ (0 or 1) with ○ new in the hunter's words, mining or a bug net, the local
+// hunter, the tool in the pouch, no body ○ would carve, and Gather with ○ on.
+// Nothing otherwise.
 [[nodiscard]] std::optional<std::uint16_t> circle_gather(
     const psprecomp::GuestMemory &memory, std::uint32_t hunter, std::uint32_t button, std::uint16_t kind);
 
