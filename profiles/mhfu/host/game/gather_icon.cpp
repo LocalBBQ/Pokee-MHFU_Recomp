@@ -834,12 +834,15 @@ bool GatherRepeat::apply(HunterButtons &buttons, bool ready, std::uint32_t butto
     const bool down = (pad & button) != 0u;
     if ((buttons.fresh & button) != 0u) pressed_ = true;
     // A second button can drop the gather button from the resolved pad for a
-    // few frames. The hold continues until nothing is held.
+    // few frames, and the hold goes on through them. Missing for longer, or
+    // with nothing held, it has been let go.
     if (down) {
         latched_ = true;
-    } else if ((pad & ~button) == 0u) {
+        missing_ = 0u;
+    } else if ((pad & ~button) == 0u || ++missing_ > kGatherDropFrames) {
         latched_ = false;
         pressed_ = false;
+        missing_ = 0u;
     }
     if (!ready || !latched_ || !pressed_) {
         holding_ = false;

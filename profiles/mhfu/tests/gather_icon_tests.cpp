@@ -353,6 +353,23 @@ void test_holding_circle() {
     check(!repeat.underway() && let_go.held == 0u && let_go.magnitude == kPushed,
         "letting every button go ends the hold and frees the stick");
 
+    // ○ let go while another button stays down, as when sprinting with R up to
+    // a point: the hold goes on through a short drop, then ends.
+    restart();
+    (void)held(kCircle, true);
+    bool kept = true;
+    for (unsigned frame = 0; frame < kGatherDropFrames; ++frame) kept = kept && held(kSquare, true).held == kCircle;
+    check(kept && repeat.underway(), "a few frames without ○ under another button keep the hold");
+    const HunterButtons sprint = held(kSquare, true);
+    check(!repeat.underway() && sprint.held == kSquare && sprint.magnitude == kPushed,
+        "longer, ○ has been let go: the hold ends and the words are the game's");
+    check(!repeat.underway() && held(kSquare, true).fresh == 0u, "and it does not start again on its own");
+    check(held(kCircle | kSquare, true).fresh == kCircle && repeat.underway(), "until ○ is pressed again");
+    (void)held(kCircle, true);
+    (void)held(kSquare, true);
+    check(held(kCircle | kSquare, true).held == kCircle && repeat.underway(),
+        "○ back within the drop goes on with the same hold");
+
     restart();
     const HunterButtons bar = held(kCircle | kLead, true);
     check(!repeat.underway() && bar.held == (kCircle | kLead), "L+○ before a hold starts is left to the item bar");

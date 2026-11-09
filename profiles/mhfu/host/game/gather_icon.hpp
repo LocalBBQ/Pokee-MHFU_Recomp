@@ -318,6 +318,11 @@ inline constexpr std::uint32_t kPadButtons = 0xFFFFu;
 // the pulse the hold used to send on the pad (three reads down, three up).
 inline constexpr unsigned kGatherPressFrames = 6u;
 
+// The most frames a hold survives with its button missing while another is
+// held: a resolved pad can drop the button for a few frames, but a button
+// let go with another still down (sprinting with R) ends the hold.
+inline constexpr unsigned kGatherDropFrames = 4u;
+
 // How many of the hunter's frames after a new ○ the circle handler may still
 // take it as a gather (one second): the game asks the handler once the
 // action the press came during has ended.
@@ -368,9 +373,12 @@ public:
 
 private:
     bool holding_{};
-    // The gather button was down for this hold. Stays set while some other
-    // button is held, so a resolved pad that dropped it does not read as a release.
+    // The gather button was down for this hold. Stays set for up to
+    // kGatherDropFrames while some other button is held, so a resolved pad
+    // that dropped it does not read as a release.
     bool latched_{};
+    // Frames the gather button has been missing with another button held.
+    unsigned missing_{};
     // The hunter saw the gather button new since it went down.
     bool pressed_{};
     std::uint32_t button_{0x2000u}; // ○ until a hold picks □
