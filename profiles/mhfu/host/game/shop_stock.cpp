@@ -27,6 +27,10 @@ bool village_or_hall(std::uint32_t slot) {
         (slot >= kHallTable && slot < kHallTable + kHallLists * 4u);
 }
 
+bool exchange(std::uint32_t slot) {
+    return slot >= kExchangeTable && slot < kExchangeTable + kExchangeLists * 4u;
+}
+
 std::size_t keep(Ram &ram, std::span<const Stocking> stockings) {
     if (!code_matches(ram)) return 0u;
     // Each word's game list, read before any copy is written over the last

@@ -75,9 +75,10 @@ inline constexpr std::uint32_t kGuestCallReturnStub = 0x0880000Cu;
 // 0x08800120, 0x08800124: the combinations' stops (game/throwing_knives.hpp).
 // 0x08800200..0x08802000: the stores' lists with the port's items (game/shop_stock.hpp).
 // 0x08802000..0x088025A0: the Item Sets screens' windows and words (game/item_sets.hpp).
-// 0x08802800..0x08802814: the new combinations' records (game/throwing_knives.hpp).
+// 0x08802800..0x0880281E: the new combinations' records (game/throwing_knives.hpp).
 // 0x08803000..0x08803390: the fourth pouch page's blocks (game/pouch_slots.hpp, game/pouch_page.hpp).
 // 0x08803390..0x08803640: the Lg Backpack's texts (game/backpack.hpp).
+// 0x08803640..0x08803940: the tool pouches' texts (game/tool_pouches.hpp).
 // 0x08803F00..0x08803F20: the item bar's "Nothing Selected" (game/empty_item_slot.hpp).
 // Kernel partition scratch used by the host (boot arguments, interrupt stack).
 inline constexpr std::uint32_t kBootArgumentAddress = 0x08100000u;

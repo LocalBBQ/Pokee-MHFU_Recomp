@@ -1,16 +1,18 @@
 #pragma once
 
 // The stores' stock, as the port's features want it: the Throwing Knife
-// after the Boomerang (game/throwing_knives.hpp) and the Lg Backpack by the
-// Guides (game/backpack.hpp). Both change the same lists, so one place keeps
+// after the Boomerang (game/throwing_knives.hpp), the Lg Backpack by the
+// Guides (game/backpack.hpp) and the tool pouches in the Pokke Point exchange
+// (game/tool_pouches.hpp). They change the same tables, so one place keeps
 // them: each feature only says what a list should hold.
 //
 // lobby_task (ULUS-10391) keeps each store's stock as lists of item ids
 // ending in 0xFFFF, from 0x09B06510, one list per stage of the village or the
 // hall, and tables of pointers to them from 0x09B070A8, each table ending in
 // 0: the village store's at 0x09B070A8 (eight lists, read at 0x09A803A0), the
-// Guild Hall's at 0x09B070D0 (five) and 0x09B070F8 (read at 0x09A8051C), with
-// more after them up to 0x09B07148. A pointer whose list a feature changes
+// Guild Hall's at 0x09B070D0 (five) and 0x09B070F8 (read at 0x09A8051C), and
+// the Pokke Point exchange's at 0x09B07120 (eight, read at 0x09A80640), up to
+// 0x09B07148. A pointer whose list a feature changes
 // points to a copy in the window the host reserves below the executable
 // (kernel/kernel.hpp); the word before a copy is the game's list it was made
 // from, so the game's list is known again whatever the pointer is now. The
@@ -35,6 +37,8 @@ inline constexpr std::uint32_t kVillageTable = 0x09B070A8u;
 inline constexpr std::uint32_t kVillageLists = 8u;
 inline constexpr std::uint32_t kHallTable = 0x09B070D0u;
 inline constexpr std::uint32_t kHallLists = 5u;
+inline constexpr std::uint32_t kExchangeTable = 0x09B07120u;
+inline constexpr std::uint32_t kExchangeLists = 8u;
 inline constexpr std::uint16_t kListEnd = 0xFFFFu;
 
 // The copies: the game's lists take about 3 KiB in all.
@@ -64,6 +68,8 @@ inline constexpr std::array<CodeWord, 4> kSignature{{
 // The table word at `slot` is one of the village store's lists, or one of the
 // Guild Hall store's.
 [[nodiscard]] bool village_or_hall(std::uint32_t slot);
+// The table word at `slot` is one of the Pokke Point exchange's lists.
+[[nodiscard]] bool exchange(std::uint32_t slot);
 
 // A feature's change to the list the table word at `slot` points to: the
 // ids it gets, the game's own, and returns them as the feature wants them.

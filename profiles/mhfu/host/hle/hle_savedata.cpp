@@ -15,6 +15,7 @@
 
 #include "game/install_data.hpp"
 #include "game/pouch_page.hpp"
+#include "game/tool_pouches.hpp"
 #include "save_data/savedata_crypto.hpp"
 #include "save_data/savedata_store.hpp"
 #include "save_data/save_transfer.hpp"
@@ -286,6 +287,7 @@ std::uint32_t do_load(psprecomp::GuestMemory &memory, std::uint32_t params, cons
         std::cerr << "[savedata] " << files.file_name << " holds " << data.size() << " bytes; the buffer takes "
                   << capacity << "\n";
     game::pouch_page::game_loaded();
+    game::tool_pouches::game_loaded();
     if (files.game_name == game::install_data::kSaveGame && files.file_name == game::install_data::kSaveFile)
         game::install_data::save_loaded(buffer);
     return result::kOk;
@@ -322,8 +324,10 @@ std::uint32_t do_save(psprecomp::GuestMemory &memory, std::uint32_t params, cons
     std::cerr << "[savedata] saved " << size << " bytes to "
               << path_to_utf8(savedata::save_folder(state().memory_stick, files)) << (files.key ? " (encrypted)" : "")
               << "\n";
-    // The fourth pouch page is kept with each save the game writes.
+    // The fourth pouch page and the tool pouches are kept with each save the
+    // game writes.
     game::pouch_page::game_saved(memory);
+    game::tool_pouches::game_saved();
     return result::kOk;
 }
 

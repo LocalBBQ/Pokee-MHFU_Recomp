@@ -135,13 +135,13 @@ std::vector<std::uint16_t> with_item(std::vector<std::uint16_t> ids) {
     return ids;
 }
 
-bool grey_out(Ram &ram, std::uint32_t store) {
+bool grey_out(Ram &ram, std::uint32_t store, std::uint16_t item) {
     if (store == 0u || !ram.contains(store, kStoreRow + kMostRows * kRowBytes)) return false;
     const std::uint32_t rows = ram.load32(store + kStoreRows);
     if (ram.load8(store + kStoreMode) != 0u || rows > kMostRows) return false;
     for (std::uint32_t i = 0; i < rows; ++i) {
         const std::uint32_t row = store + kStoreRow + i * kRowBytes;
-        if (ram.load16(row + kRowItem) == kItem) ram.store16(row + kRowGreyed, 1u);
+        if (ram.load16(row + kRowItem) == item) ram.store16(row + kRowGreyed, 1u);
     }
     return true;
 }
@@ -153,25 +153,25 @@ bool village_store_talk(const Ram &ram, std::uint32_t talk) {
     return layout::in_ram(record) && ram.contains(record, 4u) && ram.load32(record) == kVillageStore;
 }
 
-std::uint32_t held(const Ram &ram, const Places &places) {
+std::uint32_t held(const Ram &ram, const Places &places, std::uint16_t item) {
     const auto count = [&](std::uint32_t first, std::uint32_t slots) {
         std::uint32_t total = 0u;
         if (first == 0u || !ram.contains(first, slots * 4u)) return total;
         for (std::uint32_t i = 0; i < slots; ++i)
-            if (ram.load16(first + i * 4u) == kItem) total += ram.load16(first + i * 4u + 2u);
+            if (ram.load16(first + i * 4u) == item) total += ram.load16(first + i * 4u + 2u);
         return total;
     };
     return count(places.box, kBoxSlots) + std::max(count(places.pouch, places.slots), count(places.saved, places.slots));
 }
 
-void take(Ram &ram, const Places &places, std::uint32_t count) {
+void take(Ram &ram, const Places &places, std::uint32_t count, std::uint16_t item) {
     // Up to `wanted` from the slots from `first`; how many were there.
     const auto take_from = [&](std::uint32_t first, std::uint32_t slots, std::uint32_t wanted) {
         std::uint32_t taken = 0u;
         if (first == 0u || !ram.contains(first, slots * 4u)) return taken;
         for (std::uint32_t i = 0; i < slots && taken < wanted; ++i) {
             const std::uint32_t at = first + i * 4u;
-            if (ram.load16(at) != kItem) continue;
+            if (ram.load16(at) != item) continue;
             const std::uint16_t here = ram.load16(at + 2u);
             const std::uint16_t out = static_cast<std::uint16_t>(std::min<std::uint32_t>(here, wanted - taken));
             taken += out;

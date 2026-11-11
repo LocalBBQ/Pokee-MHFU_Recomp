@@ -254,14 +254,16 @@ psprecomp::AllegrexContext call(psprecomp::Runtime &runtime, std::uint32_t funct
 
 void test_lookups() {
     psprecomp::GuestMemory memory(kMemory);
-    check(new_combo(kWhetstone, kMachaliteOre) == 0u, "Whetstone + Machalite Ore is the first new combination");
-    check(new_combo(kDragoniteOre, kWhetstone) == 1u, "Dragonite Ore + Whetstone, in either order, the second");
-    check(new_combo(0xFFFF0000u | kWhetstone, kMachaliteOre) == 0u, "the items are read as halfwords");
+    check(new_combo(kWhetstone, kIronOre) == 0u, "Whetstone + Iron Ore is the first new combination");
+    check(new_combo(kDiskStone, kWhetstone) == 1u, "Disk Stone + Whetstone, in either order, the second");
+    check(new_combo(kWhetstone, kEarthCrystal) == 2u, "Whetstone + Earth Crystal the third");
+    check(new_combo(0xFFFF0000u | kWhetstone, kIronOre) == 0u, "the items are read as halfwords");
     check(!new_combo(kWhetstone, kSmMonsterBone), "the game's combinations are not new");
-    check(!new_combo(202u, kWhetstone), "Iron Ore makes no knife");
+    check(!new_combo(204u, kWhetstone), "Machalite Ore makes no knife");
+    check(!new_combo(205u, kWhetstone), "nor Dragonite Ore");
 
     const std::array<std::uint8_t, kRecordSize> bytes = record_bytes(kNewCombos[1]);
-    check(bytes[0] == (kDragoniteOre & 0xFFu) && bytes[1] == 0u, "the record holds the higher item");
+    check(bytes[0] == (kDiskStone & 0xFFu) && bytes[1] == 0u, "the record holds the higher item");
     check(bytes[2] == kThrowingKnife && bytes[3] == 0u, "and makes a Throwing Knife");
     check(bytes[4] == kRateClass && bytes[5] == kYieldClass, "at the Boomerang's rate and yield");
     check(bytes[6] == 173u && bytes[7] == 0u && bytes[8] == 173u, "with its own known bit, flags clear");
@@ -269,14 +271,15 @@ void test_lookups() {
     write_combinations(memory);
     check(game_record(memory, kBlueMushroom, kHerb) == kRecords, "a game record is found by its lower item");
     check(game_record(memory, kWhetstone, kSmMonsterBone) == kRecords + 2u * kRecordSize, "Whetstone's one record");
-    check(game_record(memory, kWhetstone, kMachaliteOre) == 0u, "the game has no Machalite combination");
+    check(game_record(memory, kWhetstone, kIronOre) == 0u, "the game has no Iron Ore combination");
     check(game_record(memory, 0xFFFFu, kHerb) == 0u, "an item read as negative has no record");
     check(game_record(memory, kIndexItems, kIndexItems + 1u) == 0u, "nor an item past the index");
 
     check(pair_at(memory, 2) == std::array<std::int16_t, 2>{kWhetstone, kSmMonsterBone}, "the game's list entry");
-    check(pair_at(memory, 172) == std::array<std::int16_t, 2>{kWhetstone, kMachaliteOre}, "entry 172 is new");
-    check(pair_at(memory, 173) == std::array<std::int16_t, 2>{kWhetstone, kDragoniteOre}, "and 173");
-    check(!pair_at(memory, 174) && !pair_at(memory, -1), "there are 174");
+    check(pair_at(memory, 172) == std::array<std::int16_t, 2>{kWhetstone, kIronOre}, "entry 172 is new");
+    check(pair_at(memory, 173) == std::array<std::int16_t, 2>{kWhetstone, kDiskStone}, "and 173");
+    check(pair_at(memory, 174) == std::array<std::int16_t, 2>{kWhetstone, kEarthCrystal}, "and 174");
+    check(!pair_at(memory, 175) && !pair_at(memory, -1), "there are 175");
 }
 
 void test_lists() {
@@ -340,8 +343,8 @@ void test_frame() {
         check((memory.load8(item_record(knife) + kFlags) & kSupplyItem) == 0u, "a knife is no supply item");
         check(memory.load8(item_record(knife) + kFlags) == 0x20u, "and keeps its other flags");
     }
-    check(memory.load32(item_record(58u) + kBuyPrice) == kKnifePrice, "the Throwing Knife costs 750z");
-    check(memory.load32(item_record(58u) + kSellPrice) == kKnifeSellPrice, "and sells for 75z");
+    check(memory.load32(item_record(58u) + kBuyPrice) == kKnifePrice, "the Throwing Knife costs 500z");
+    check(memory.load32(item_record(58u) + kSellPrice) == kKnifeSellPrice, "and sells for 50z");
     check(memory.load32(item_record(59u) + kBuyPrice) == 0u, "a coated knife is not sold");
     check(read_text(memory, 58u) == "Stand-in text for the\nplain knife.", "the tag is cut");
     check(read_text(memory, 62u) == "Stand-in text for the\ntranq knife.", "on every knife");
@@ -401,25 +404,30 @@ void test_combinations() {
 
     // The search.
     game_calls = 0;
-    psprecomp::AllegrexContext ctx = call(runtime, kSearch, {0u, kMachaliteOre, kWhetstone, 1u, 0u, 5u});
+    psprecomp::AllegrexContext ctx = call(runtime, kSearch, {0u, kIronOre, kWhetstone, 1u, 0u, 5u});
     check(ctx.gpr[2] == new_record(0) && ctx.pc == kReturn, "with bit 0 of mode, the new record");
-    check(call(runtime, kSearch, {0u, kWhetstone, kDragoniteOre, 0u, 1u, 0u}).gpr[2] == new_record(1),
+    check(call(runtime, kSearch, {0u, kWhetstone, kDiskStone, 0u, 1u, 0u}).gpr[2] == new_record(1),
         "for t1 0, as lobby_task asks");
-    check(call(runtime, kSearch, {0u, kWhetstone, kDragoniteOre, 0u, 0u, 0xFFFFFFFFu}).gpr[2] == new_record(1),
-        "for t1 -1");
-    check(call(runtime, kSearch, {0u, kWhetstone, kDragoniteOre, 0u, 0u, 1u}).gpr[2] == new_record(1), "for t1 1");
-    check(call(runtime, kSearch, {0u, kWhetstone, kDragoniteOre, 0u, 0u, 2u}).gpr[2] == 0u, "not for t1 2");
+    check(
+        call(runtime, kSearch, {0u, kWhetstone, kDiskStone, 0u, 0u, 0xFFFFFFFFu}).gpr[2] == new_record(1), "for t1 -1");
+    check(call(runtime, kSearch, {0u, kWhetstone, kDiskStone, 0u, 0u, 1u}).gpr[2] == new_record(1), "for t1 1");
+    check(call(runtime, kSearch, {0u, kWhetstone, kDiskStone, 0u, 0u, 2u}).gpr[2] == 0u, "not for t1 2");
     check(game_calls == 0, "a new pair never reaches the game's search");
     check(call(runtime, kSearch, {0u, kHerb, kBlueMushroom, 1u, 0u, 0u}).gpr[2] == kRecords && game_calls == 1,
         "the game's pairs are the game's");
-    check(memory.load16(new_record(0)) == kMachaliteOre && memory.load16(new_record(0) + 2u) == kThrowingKnife,
+    check(call(runtime, kSearch, {0u, kEarthCrystal, kWhetstone, 1u, 0u, 0u}).gpr[2] == new_record(2),
+        "the third has its own record");
+    check(memory.load16(new_record(0)) == kIronOre && memory.load16(new_record(0) + 2u) == kThrowingKnife,
         "the records are in the host's window");
 
     // Known.
-    check(call(runtime, kKnown, {0u, kWhetstone, kMachaliteOre}).gpr[2] == 0u, "a new combination starts unknown");
+    check(call(runtime, kKnown, {0u, kWhetstone, kIronOre}).gpr[2] == 0u, "a new combination starts unknown");
     memory.store8(kGameSys + kKnownBits + 21u, 0x10u); // bit 172
-    check(call(runtime, kKnown, {0u, kWhetstone, kMachaliteOre}).gpr[2] == 1u, "bit 172 makes the first known");
-    check(call(runtime, kKnown, {0u, kWhetstone, kDragoniteOre}).gpr[2] == 0u, "and only the first");
+    check(call(runtime, kKnown, {0u, kWhetstone, kIronOre}).gpr[2] == 1u, "bit 172 makes the first known");
+    check(call(runtime, kKnown, {0u, kWhetstone, kDiskStone}).gpr[2] == 0u, "and only the first");
+    memory.store8(kGameSys + kKnownBits + 21u, 0x50u); // bits 172 and 174
+    check(call(runtime, kKnown, {0u, kWhetstone, kEarthCrystal}).gpr[2] == 1u, "bit 174 makes the third known");
+    memory.store8(kGameSys + kKnownBits + 21u, 0x10u);
     game_calls = 0;
     check(
         call(runtime, kKnown, {0u, kHerb, kBlueMushroom}).gpr[2] == 7u && game_calls == 1, "the game's asks the game");
@@ -431,15 +439,17 @@ void test_combinations() {
     memory.store8(kIndexByte, 171u);
     ctx = call(runtime, kStep, {0u, kIndexByte, 1u, kA, kB, 1u});
     check(ctx.gpr[2] == new_record(0) && memory.load8(kIndexByte) == 172u, "after 171 comes 172");
-    check(memory.load16(kA) == kWhetstone && memory.load16(kB) == kMachaliteOre, "with its pair");
+    check(memory.load16(kA) == kWhetstone && memory.load16(kB) == kIronOre, "with its pair");
     call(runtime, kStep, {0u, kIndexByte, 1u, kA, kB, 1u});
-    check(memory.load8(kIndexByte) == 173u && memory.load16(kB) == kDragoniteOre, "then 173");
+    check(memory.load8(kIndexByte) == 173u && memory.load16(kB) == kDiskStone, "then 173");
+    call(runtime, kStep, {0u, kIndexByte, 1u, kA, kB, 1u});
+    check(memory.load8(kIndexByte) == 174u && memory.load16(kB) == kEarthCrystal, "then 174");
     ctx = call(runtime, kStep, {0u, kIndexByte, 1u, kA, kB, 1u});
     check(memory.load8(kIndexByte) == 0u && ctx.gpr[2] == kRecords, "then round to the first");
     ctx = call(runtime, kStep, {0u, kIndexByte, 0xFFu, kA, kB, 1u});
-    check(memory.load8(kIndexByte) == 173u && ctx.gpr[2] == new_record(1), "back from the first is the last");
+    check(memory.load8(kIndexByte) == 174u && ctx.gpr[2] == new_record(2), "back from the first is the last");
     ctx = call(runtime, kStep, {0u, kIndexByte, 0u, kA, kB, 1u});
-    check(memory.load8(kIndexByte) == 173u && ctx.gpr[2] == new_record(1), "step 0 is the entry itself");
+    check(memory.load8(kIndexByte) == 174u && ctx.gpr[2] == new_record(2), "step 0 is the entry itself");
     memory.store8(kIndexByte, 2u);
     ctx = call(runtime, kStep, {0u, kIndexByte, 1u, kA, kB, 1u});
     check(memory.load8(kIndexByte) == 172u, "entries without a record are passed over");
@@ -452,33 +462,33 @@ void test_combinations() {
     check(game_calls == 1 && memory.load8(kIndexByte) == kGameCombos - 1u,
         "another mode is the game's walk, from within its 172");
 
-    // The Combine screen counts 174.
+    // The Combine screen counts 175.
     memory.store8(kScreen + kCursor + kRows, 8u);
-    memory.store16(kScreen + kCursor + kSelected, 173u);
+    memory.store16(kScreen + kCursor + kSelected, 174u);
     ctx = call(runtime, kListOpen, {kScreen});
     check(ctx.pc == kReturn && ctx.gpr[31] == kReturn, "the screen's count returns to its caller");
-    check(memory.load8(kScreen + kCursor + kPages) == 22u, "174 entries in rows of 8 are 22 pages");
-    check(memory.load8(kScreen + kCursor + kLastRows) == 6u, "the last with 6");
-    check(memory.load16(kScreen + kCursor + kSelected) == 173u, "the selection stays on the last entry");
-    check(memory.load8(kScreen + kCursor + kRow) == 5u && memory.load8(kScreen + kCursor + kPage) == 21u,
+    check(memory.load8(kScreen + kCursor + kPages) == 22u, "175 entries in rows of 8 are 22 pages");
+    check(memory.load8(kScreen + kCursor + kLastRows) == 7u, "the last with 7");
+    check(memory.load16(kScreen + kCursor + kSelected) == 174u, "the selection stays on the last entry");
+    check(memory.load8(kScreen + kCursor + kRow) == 6u && memory.load8(kScreen + kCursor + kPage) == 21u,
         "on the last page's last row");
     memory.store16(kScreen + kCursor + kSelected, 300u);
     call(runtime, kListOpen, {kScreen});
-    check(memory.load16(kScreen + kCursor + kSelected) == 173u, "a selection past the end is the last entry");
+    check(memory.load16(kScreen + kCursor + kSelected) == 174u, "a selection past the end is the last entry");
 
     // Combining: the game's code sees the new record in Whetstone's place.
     const std::uint32_t whetstone = kRecords + 2u * kRecordSize;
     combined_result = 0u;
-    ctx = call(runtime, kCombine, {0u, 0u, 0u, kWhetstone, kMachaliteOre, 0u});
-    check(combined_result == kThrowingKnife && ctx.gpr[2] == 1u, "Whetstone + Machalite Ore makes a knife");
+    ctx = call(runtime, kCombine, {0u, 0u, 0u, kWhetstone, kIronOre, 0u});
+    check(combined_result == kThrowingKnife && ctx.gpr[2] == 1u, "Whetstone + Iron Ore makes a knife");
     check(ctx.pc == kReturn && ctx.gpr[31] == kReturn, "and returns to its caller");
     check(memory.load16(whetstone) == kSmMonsterBone && memory.load16(whetstone + 2u) == kBoomerang,
         "Whetstone's record is put back");
     ctx = call(runtime, kCombine, {0u, 0u, 0u, kWhetstone, kSmMonsterBone, 0u});
     check(combined_result == kBoomerang, "and the Boomerang is made as before");
     combine_partway = true;
-    ctx = call(runtime, kCombine, {0u, 0u, 0u, kDragoniteOre, kWhetstone, 0u});
-    check(combined_result == kThrowingKnife && memory.load16(whetstone) == kDragoniteOre,
+    ctx = call(runtime, kCombine, {0u, 0u, 0u, kDiskStone, kWhetstone, 0u});
+    check(combined_result == kThrowingKnife && memory.load16(whetstone) == kDiskStone,
         "partway, the new record stays in place");
     ctx.pc = kCombineStop;
     runtime.function_at(kCombineStop)(runtime, ctx);
@@ -490,9 +500,9 @@ void test_combinations() {
     // Off, everything is the game's.
     settings.throwing_knives = false;
     game_calls = 0;
-    check(call(runtime, kSearch, {0u, kWhetstone, kMachaliteOre, 1u, 0u, 0u}).gpr[2] == 0u && game_calls == 1,
-        "off, the game finds no Machalite combination");
-    call(runtime, kCombine, {0u, 0u, 0u, kWhetstone, kMachaliteOre, 0u});
+    check(call(runtime, kSearch, {0u, kWhetstone, kIronOre, 1u, 0u, 0u}).gpr[2] == 0u && game_calls == 1,
+        "off, the game finds no Iron Ore combination");
+    call(runtime, kCombine, {0u, 0u, 0u, kWhetstone, kIronOre, 0u});
     check(combined_result == 0u, "and makes nothing of it");
     memory.store16(kScreen + kCursor + kSelected, 10u);
     call(runtime, kListOpen, {kScreen});
@@ -506,7 +516,7 @@ void test_game_has_it() {
     psprecomp::GuestMemory &memory = runtime.memory();
     mhfu::settings::current().throwing_knives = true;
     write_game(memory);
-    write_record(memory, 2u, kMachaliteOre, kThrowingKnife);
+    write_record(memory, 2u, kEarthCrystal, kThrowingKnife);
     install_game(runtime);
     step(runtime);
     check(runtime.function_at(kSearch) == &game_search, "a game with the combination keeps its own");

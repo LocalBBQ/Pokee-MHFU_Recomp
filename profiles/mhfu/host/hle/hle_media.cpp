@@ -24,6 +24,7 @@
 #include "game/give_rarity.hpp"
 #include "game/bed_stamina.hpp"
 #include "game/throwing_knives.hpp"
+#include "game/tool_pouches.hpp"
 #include "game/true_attack.hpp"
 #include "game/true_element.hpp"
 #include "game/hall_equipment.hpp"
@@ -407,12 +408,14 @@ void present_frame(Runtime &rt) {
     game::item_sets::frame(rt);
     game::pouch_page::frame(rt);
     game::backpack::frame(rt);
+    game::tool_pouches::frame(rt);
     game::install_data::option_frame(rt.memory());
-    // The stores' lists, as the knives and the Lg Backpack have just said.
+    // The stores' lists, as the knives, the Lg Backpack and the tool pouches
+    // have just said.
     {
         game::GuestRam ram(rt.memory());
-        constexpr std::array<game::shop_stock::Stocking, 2> kStockings{
-            &game::throwing_knives::stock, &game::backpack::stock};
+        constexpr std::array<game::shop_stock::Stocking, 3> kStockings{
+            &game::throwing_knives::stock, &game::backpack::stock, &game::tool_pouches::stock};
         (void)game::shop_stock::keep(ram, kStockings);
     }
     game::hall_meal::frame(rt, &call_guest_with_result);

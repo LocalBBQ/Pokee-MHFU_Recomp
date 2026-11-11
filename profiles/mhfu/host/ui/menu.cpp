@@ -1935,9 +1935,20 @@ void Menu::mods() {
         if (toggle_row("Throwing Knives", s.throwing_knives,
                 options_for("game.throwing_knives",
                     "On (default): throwing knives are items you keep, not supply items. The Throwing Knife is "
-                    "sold in the shops for 750z, and Whetstone + Machalite Ore or Dragonite Ore combines into "
-                    "one; the coated knives are combined from it. Off: supply items, as in the game."))) {
+                    "sold in the shops for 500z, and a Whetstone with Iron Ore, Disk Stone or Earth Crystal "
+                    "combines into one; the coated knives are combined from it. Off: supply items, as in the "
+                    "game."))) {
             s.throwing_knives = !s.throwing_knives;
+            settings::save();
+        }
+        if (toggle_row("Tool Pouches", s.tool_pouches,
+                options_for("game.tool_pouches",
+                    "On (default): the Pokke Point exchange at the farm sells pouches that let you carry more "
+                    "tools. Bugnet Pouch and Pickaxe Pouch (3500 pts) carry one more of each bugnet or pickaxe, "
+                    "their +1 (5000 pts) two more; Lg Knife Pouch (3500 pts) carries 7 of each throwing knife, "
+                    "its +1 (5000 pts) 10. Off: none are sold and every limit is the game's; what you bought is "
+                    "kept."))) {
+            s.tool_pouches = !s.tool_pouches;
             settings::save();
         }
         if (toggle_row("Bed Restores Stamina", s.bed_stamina,
