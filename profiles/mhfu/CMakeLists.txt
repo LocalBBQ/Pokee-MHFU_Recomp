@@ -298,6 +298,7 @@ set(MHFU_HOST_SOURCES
     host/game/item_sets.cpp
     host/game/item_sets_menu.cpp
     host/game/backpack.cpp
+    host/game/tool_pouches.cpp
     host/game/pouch_page.cpp
     host/game/sharpness_gauge.cpp
     third_party/tiny_aes/aes.c
@@ -760,6 +761,39 @@ target_link_libraries(mhfu_throwing_knives_tests PRIVATE psprecomp_core)
 set_target_properties(mhfu_throwing_knives_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 if(PSPRECOMP_BUILD_TESTS)
     add_test(NAME mhfu_throwing_knives_tests COMMAND mhfu_throwing_knives_tests)
+endif()
+
+# Tool pouches: the limits, the exchange's stock, the items and texts, the
+# purchase and the tiers file, on stand-ins for the game's memory and store
+# functions. No game data.
+add_executable(mhfu_tool_pouches_tests
+    tests/tool_pouches_tests.cpp
+    host/game/tool_pouches.cpp
+    host/game/backpack.cpp
+    host/game/shop_stock.cpp
+    host/game/pouch_page.cpp
+    host/game/game_data.cpp
+    host/game/guest_calls.cpp
+    host/game/item_sets.cpp
+    host/game/hooks.cpp
+    host/game/item_sets_menu.cpp
+    host/game/guest_ram.cpp
+    host/settings/settings.cpp
+    host/install/user_data.cpp
+    host/app_paths.cpp
+    host/input/bindings.cpp
+    host/input/chords.cpp
+    host/input/presets.cpp
+    host/input/touch_action.cpp
+    host/input/touch_controls.cpp
+    host/platform/utf8_path.cpp)
+add_dependencies(mhfu_tool_pouches_tests mhfu_site_hooks)
+target_include_directories(mhfu_tool_pouches_tests PRIVATE
+    "${MHFU_PROFILE_DIR}/host" "${CMAKE_CURRENT_BINARY_DIR}/generated_sites")
+target_link_libraries(mhfu_tool_pouches_tests PRIVATE psprecomp_core)
+set_target_properties(mhfu_tool_pouches_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+if(PSPRECOMP_BUILD_TESTS)
+    add_test(NAME mhfu_tool_pouches_tests COMMAND mhfu_tool_pouches_tests)
 endif()
 
 # Bed stamina: the code check, the own hunter, the restore and the watch of a

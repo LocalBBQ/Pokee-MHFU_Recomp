@@ -3,8 +3,8 @@
 // Throwing knives: the Throwing Knife and its Poison, Sleeping, Paralyze and
 // Tranq versions are no longer supply items, so they stay in the pouch after a
 // quest and go in the box. The Throwing Knife is sold in the village and
-// Guild Hall shops for 750z, next to the Boomerang, and Whetstone + Machalite
-// Ore or Whetstone + Dragonite Ore combines into one. The coated knives are
+// Guild Hall shops for 500z, next to the Boomerang, and a Whetstone with Iron
+// Ore, Disk Stone or Earth Crystal combines into one. The coated knives are
 // not sold; they are combined from a Throwing Knife as in the game. On by
 // default (Mods page, `game.throwing_knives`; `MHFU_THROWING_KNIVES=0` turns
 // it off). Turned off, the records, texts and shop lists are the game's again.
@@ -33,7 +33,7 @@
 // - The combo list, 172 pairs of items at 0x089A5984.
 // 0x0885B5B8(?, a, b, mode, t0, t1) finds the record of a pair. With bit 0 of
 // mode set, or t1 of -1, 0 or 1, it returns the record of any combination
-// whose flags are 0, as the two new ones are. 0x0885C13C(?, &index, step,
+// whose flags are 0, as the three new ones are. 0x0885C13C(?, &index, step,
 // &a, &b, mode) moves the combo list's index (a byte) by step, round the 172,
 // to the next pair with a record. The Combine screen counts its list in
 // 0x088262B0, which walks the 172 and lays out the pages in the cursor at
@@ -45,16 +45,16 @@
 // jump inside its own unit. lobby_task's item box finds and combines pairs
 // through the same functions (0x09ADF6E0, 0x09ADF2A8).
 //
-// No record or list entry is free, so the two new combinations live in the
+// No record or list entry is free, so the three new combinations live in the
 // host's window and the functions are answered around them:
-// - 0x0885C13C walks 174 entries, the new pairs as 172 and 173, and reads
+// - 0x0885C13C walks 175 entries, the new pairs as 172 to 174, and reads
 //   the records itself; all its callers ask with bit 0 of mode set.
-// - 0x088262B0 runs, and the count it laid out is made 174.
+// - 0x088262B0 runs, and the count it laid out is made 175.
 // - 0x0885B5B8 and 0x0885B7D0 answer a new pair with its record.
 // - 0x0885B82C, for a new pair, runs with the new record in place of
 //   Whetstone's one record (Whetstone + Sm Monster Bone = Boomerang), which is
 //   put back when it returns, at a stop of the port's own.
-// Their bits, 172 and 173, are the four unused at the end of the game's 22
+// Their bits, 172 to 174, are three of the four unused at the end of the game's 22
 // known bytes. The count the Guild Card's combination award checks
 // (0x0885B048, 172) stays the game's.
 //
@@ -86,11 +86,12 @@ inline constexpr std::uint32_t kSellPrice = 16u;
 inline constexpr std::uint16_t kBoomerang = 57u;
 inline constexpr std::uint16_t kThrowingKnife = 58u;
 inline constexpr std::array<std::uint16_t, 5> kKnives{58u, 59u, 60u, 61u, 62u};
-inline constexpr std::uint32_t kKnifePrice = 750u;
-inline constexpr std::uint32_t kKnifeSellPrice = 75u; // a tenth, as the game's shop items
+inline constexpr std::uint32_t kKnifePrice = 500u;
+inline constexpr std::uint32_t kKnifeSellPrice = 50u; // a tenth, as the game's shop items
 inline constexpr std::uint16_t kWhetstone = 153u;
-inline constexpr std::uint16_t kMachaliteOre = 204u;
-inline constexpr std::uint16_t kDragoniteOre = 205u;
+inline constexpr std::uint16_t kDiskStone = 201u;
+inline constexpr std::uint16_t kIronOre = 202u;
+inline constexpr std::uint16_t kEarthCrystal = 203u;
 
 // The texts.
 inline constexpr std::uint32_t kText = 0x089CC560u;
@@ -106,7 +107,7 @@ inline constexpr std::uint32_t kIndex = 0x089A4FA8u;
 inline constexpr std::uint32_t kIndexItems = 1262u; // up to the combo list
 inline constexpr std::uint32_t kPairs = 0x089A5984u;
 inline constexpr std::uint32_t kGameCombos = 172u;
-inline constexpr std::uint32_t kAllCombos = kGameCombos + 2u;
+inline constexpr std::uint32_t kAllCombos = kGameCombos + 3u;
 inline constexpr std::uint32_t kSearch = 0x0885B5B8u;
 inline constexpr std::uint32_t kKnown = 0x0885B7D0u;
 inline constexpr std::uint32_t kCombine = 0x0885B82Cu;
@@ -131,11 +132,13 @@ struct Combo {
     std::uint16_t second{}; // the higher
     std::uint8_t known_bit{};
 };
-// Whetstone + Machalite Ore and Whetstone + Dragonite Ore, both a Throwing
-// Knife at the Boomerang's rate (class 2, 90%) and yield (class 0, one).
-inline constexpr std::array<Combo, 2> kNewCombos{{
-    {kWhetstone, kMachaliteOre, 172u},
-    {kWhetstone, kDragoniteOre, 173u},
+// Whetstone + Iron Ore, Whetstone + Disk Stone and Whetstone + Earth Crystal,
+// each a Throwing Knife at the Boomerang's rate (class 2, 90%) and yield
+// (class 0, one).
+inline constexpr std::array<Combo, 3> kNewCombos{{
+    {kWhetstone, kIronOre, 172u},
+    {kWhetstone, kDiskStone, 173u},
+    {kWhetstone, kEarthCrystal, 174u},
 }};
 inline constexpr std::uint8_t kRateClass = 2u;
 inline constexpr std::uint8_t kYieldClass = 0u;

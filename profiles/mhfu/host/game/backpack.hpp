@@ -218,8 +218,8 @@ void write_text(Ram &ram, std::uint32_t address, std::string_view text);
 // village store's and the Guild Hall's with the item, else as it is.
 [[nodiscard]] std::vector<std::uint16_t> stock(std::uint32_t slot, std::vector<std::uint16_t> ids);
 // Greys the item's row out in a store's list of things to buy. False when
-// there is no such list at `store`.
-bool grey_out(Ram &ram, std::uint32_t store);
+// there is no such list at `store`. game/tool_pouches.hpp names its own items.
+bool grey_out(Ram &ram, std::uint32_t store, std::uint16_t item = kItem);
 
 // The news ---------------------------------------------------------------------
 
@@ -237,10 +237,10 @@ struct Places {
     std::uint32_t slots{};
 };
 // How many of the item the hunter has.
-[[nodiscard]] std::uint32_t held(const Ram &ram, const Places &places);
+[[nodiscard]] std::uint32_t held(const Ram &ram, const Places &places, std::uint16_t item = kItem);
 // Takes `count` of the item out: from the pouch and its copy first, then the
 // box.
-void take(Ram &ram, const Places &places, std::uint32_t count);
+void take(Ram &ram, const Places &places, std::uint32_t count, std::uint16_t item = kItem);
 // The zenny back for `extra` items.
 void refund(Ram &ram, std::uint32_t game_sys, std::uint32_t extra);
 

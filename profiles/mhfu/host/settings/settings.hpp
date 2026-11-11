@@ -263,10 +263,15 @@ struct Settings {
     // default; without such quests nothing changes. Off: the save's alone.
     bool event_quests{true};
     // The five throwing knives are items, not supply items; the Throwing
-    // Knife is sold in the shops for 750z and Whetstone + Machalite or
-    // Dragonite Ore combines into one (game/throwing_knives.hpp). On by
-    // default. Off: the game's supply items.
+    // Knife is sold in the shops for 500z and a Whetstone with Iron Ore, Disk
+    // Stone or Earth Crystal combines into one (game/throwing_knives.hpp). On
+    // by default. Off: the game's supply items.
     bool throwing_knives{true};
+    // The Pokke Point exchange sells pouches that raise how many bugnets,
+    // pickaxes and throwing knives the hunter carries (game/tool_pouches.hpp).
+    // On by default. Off: none are sold and every limit is the game's; what a
+    // hunter owns is kept.
+    bool tool_pouches{true};
     // Sleeping in a camp bed fills stamina below 100 back up to 100 as it
     // fills health (game/bed_stamina.hpp). On by default. Off: the bed gives
     // back health only, as in the game.

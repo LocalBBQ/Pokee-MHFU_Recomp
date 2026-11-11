@@ -180,7 +180,7 @@ void combine(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     if (ctx.pc == kCombineStop) combine_returned(runtime, ctx);
 }
 
-// The game's step over 174 entries. a1 points to the index byte, a2 is the
+// The game's step over 175 entries. a1 points to the index byte, a2 is the
 // step (0: the entry itself, else the next one that has a record), a3 and t0
 // get the pair, t1 is the mode.
 void step(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
@@ -231,7 +231,7 @@ void step(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     answer(ctx, 0u);
 }
 
-// The cursor laid out for 174 entries, the selection kept where it was.
+// The cursor laid out for 175 entries, the selection kept where it was.
 void lay_out(psprecomp::GuestMemory &memory, std::uint32_t screen, std::uint16_t selected) {
     const std::uint32_t cursor = screen + kCursor;
     if (!memory.contains(cursor, kLastRows + 1u)) return;
@@ -259,7 +259,7 @@ void list_opened(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
 }
 
 // a0 is the Combine screen. The game counts its 172 and lays them out; at the
-// stop the count is the 174 the step walks.
+// stop the count is the 175 the step walks.
 void list_open(psprecomp::Runtime &runtime, psprecomp::AllegrexContext &ctx) {
     State &s = state();
     const psprecomp::GuestMemory &memory = runtime.memory();
