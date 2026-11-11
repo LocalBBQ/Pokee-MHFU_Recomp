@@ -162,8 +162,8 @@ inline constexpr std::uint32_t kBuyFullLine = 492u;
 
 // What the host keeps in its reserved window (kernel/kernel.hpp), after the
 // pouch page's blocks.
-inline constexpr std::uint32_t kNameText = 0x08803380u;
-inline constexpr std::uint32_t kDescriptionText = 0x08803390u;
+inline constexpr std::uint32_t kNameText = 0x08803390u;
+inline constexpr std::uint32_t kDescriptionText = 0x088033A0u;
 inline constexpr std::uint32_t kBuyFullText = 0x08803500u;
 inline constexpr std::uint32_t kNewsText = 0x08803580u;
 inline constexpr std::uint32_t kTextsEnd = 0x08803640u;

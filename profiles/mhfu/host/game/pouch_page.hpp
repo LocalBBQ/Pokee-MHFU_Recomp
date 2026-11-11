@@ -90,15 +90,21 @@ inline constexpr std::uint32_t kGameAside = 0x6ADFCu;
 inline constexpr std::uint32_t kDirectBias = 0x70000u; // GameSys + 4i + this, read at -0x515A
 inline constexpr std::uint32_t kDirectOffset = 0x515Au;
 
-// The blocks, in the window the host reserves.
+// The blocks, in the window the host reserves. The word after the pouch's
+// 32 slots is kept 0, as the game's 25th word is while the bow has no coating:
+// the HUD prints the selected item's name from slot 0's address plus four
+// bytes a slot (EBOOT 0x08845B00), so with Empty item slot's stop, slot 32
+// (game/empty_item_slot.hpp), it reads that word and finds nothing there.
 inline constexpr std::uint32_t kPouch = pouch_slots::kBlock;
-inline constexpr std::uint32_t kSaved = 0x08803080u;
-inline constexpr std::uint32_t kAside = 0x08803100u;
-inline constexpr std::uint32_t kHunterCopy = 0x08803180u;
-inline constexpr std::uint32_t kList1 = 0x08803200u; // 32 words each
-inline constexpr std::uint32_t kList2 = 0x08803280u;
-inline constexpr std::uint32_t kList3 = 0x08803300u;
-inline constexpr std::uint32_t kBlocksEnd = 0x08803380u;
+inline constexpr std::uint32_t kPouchEnd = kPouch + kSlots * 4u; // always 0
+inline constexpr std::uint32_t kSaved = 0x08803090u;
+inline constexpr std::uint32_t kAside = 0x08803110u;
+inline constexpr std::uint32_t kHunterCopy = 0x08803190u;
+inline constexpr std::uint32_t kList1 = 0x08803210u; // 32 words each
+inline constexpr std::uint32_t kList2 = 0x08803290u;
+inline constexpr std::uint32_t kList3 = 0x08803310u;
+inline constexpr std::uint32_t kBlocksEnd = 0x08803390u;
+static_assert(kSaved >= kPouchEnd + 4u, "the word after the pouch is no other block's");
 
 // Sites -----------------------------------------------------------------------
 

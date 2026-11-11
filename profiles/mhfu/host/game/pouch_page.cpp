@@ -284,6 +284,7 @@ Mirror fill_blocks(Ram &ram, std::uint32_t game_sys, const HunterPage &page) {
                 static_cast<std::uint32_t>(slot.item) | (static_cast<std::uint32_t>(slot.count) << 16u));
         }
     }
+    for (std::uint32_t at = kPouchEnd; at < kSaved; at += 4u) ram.store32(at, 0u);
     for (std::uint32_t at = kHunterCopy; at < kBlocksEnd; at += 4u) ram.store32(at, 0u);
     return mirror;
 }

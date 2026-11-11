@@ -250,6 +250,7 @@ void test_blocks() {
     ram.store32(kSys + kGameBowSlot, slot_word(0x80u, 0xFFu));
     ram.store32(kHunterCopy, 0xDEADBEEFu);
     ram.store32(kList3 + 0x7Cu, 0xDEADBEEFu);
+    ram.store32(kPouchEnd, 0xDEADBEEFu);
     HunterPage page;
     page.owned = true;
     page.slots[0][0] = {7u, 5u};
@@ -262,6 +263,9 @@ void test_blocks() {
     check(ram.load32(kSaved + 31u * 4u) == slot_word(8u, 6u), "the page did not fill the saved block");
     check(ram.load32(kAside + 27u * 4u) == slot_word(9u, 4u), "the page did not fill the aside block");
     check(ram.load32(kHunterCopy) == 0u && ram.load32(kList3 + 0x7Cu) == 0u, "the copy and lists were not cleared");
+    // The HUD reads the empty stop's name at slot 0 + 32 slots (0x08845B00).
+    check(ram.load32(kPouch + kSlots * 4u) == 0u && kSaved > kPouchEnd,
+        "the word after the pouch's 32 slots is not kept empty");
     check(ram.load32(kSys + kGameBowSlot) == slot_word(0x80u, 0xFFu), "the bow's slot moved");
     check(mirror[0][0] == slot_word(100u, 1u) && mirror[2][23] == slot_word(323u, 3u), "the mirror is wrong");
     check(page_of(ram) == page, "page_of did not read the page back");
